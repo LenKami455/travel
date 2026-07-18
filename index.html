@@ -422,6 +422,7 @@ else window.SunCalc = SunCalc;
   footer{margin-top:32px;color:var(--faint);font-size:11px;line-height:1.8}
   .banner{background:#FBEFE6;border:1px solid #E8CDb0;color:var(--amber-deep);
     padding:10px 14px;border-radius:10px;margin-bottom:16px;display:none;font-size:12px}
+  .banner.info{background:#EDF2FF;border-color:#BBC8E8;color:#2C4BAD}
   /* v5 ---- trip selector */
   .trip-sel{display:flex;gap:8px;flex-wrap:wrap;align-items:center;
     margin:16px 0 0;padding-bottom:14px;border-bottom:1px solid var(--line)}
@@ -432,6 +433,8 @@ else window.SunCalc = SunCalc;
   .trip-sel button.active{background:var(--ink);color:#fff;border-color:var(--ink)}
   .trip-add-btn{border-style:dashed!important;color:var(--faint)!important}
   .trip-add-btn:hover{border-color:var(--amber)!important;color:var(--amber-deep)!important}
+  .trip-share-btn{background:#EDF2FF!important;border-color:#BBC8E8!important;color:#2C4BAD!important}
+  .trip-share-btn:hover{background:#D5E0FF!important}
   .trip-form{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:10px 0 0}
   /* v5 ---- day tabs */
   .daytabs{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0 12px}
@@ -555,6 +558,28 @@ const DIRS = ["北","北北東","北東","東北東","東","東南東","南東",
 const WD = ["日","月","火","水","木","金","土"];
 const ALPHANUM = "abcdefghijklmnopqrstuvwxyz0123456789";
 function idGen(prefix){ let s=prefix; for(let i=0;i<6;i++) s+=ALPHANUM[Math.floor(Math.random()*36)]; return s; }
+
+/* ---------- share link utilities ---------- */
+function toBase64url(bytes){
+  return btoa(String.fromCharCode(...new Uint8Array(bytes)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function fromBase64url(str){
+  const b64 = str.replace(/-/g,'+').replace(/_/g,'/');
+  const bin = atob(b64);
+  return Uint8Array.from(bin, c=>c.charCodeAt(0));
+}
+async function deflate(str){
+  const input = new TextEncoder().encode(str);
+  const cs = new CompressionStream('deflate-raw');
+  const w = cs.writable.getWriter(); w.write(input); w.close();
+  return new Uint8Array(await new Response(cs.readable).arrayBuffer());
+}
+async function inflate(bytes){
+  const ds = new DecompressionStream('deflate-raw');
+  const w = ds.writable.getWriter(); w.write(bytes); w.close();
+  return new TextDecoder().decode(await new Response(ds.readable).arrayBuffer());
+}
 const DEFAULT_SPOTS = [
   {name:"弁天島(那智勝浦)", lat:33.617, lng:135.957, memo:"干潟×星。7/26 深夜の本命"},
   {name:"四国カルスト",       lat:33.487, lng:132.940, memo:"8月ロードトリップ Day2"},
@@ -566,6 +591,8 @@ let trips = [];
 let selTrip = null;       // null = すべてのスポット, string = trip.id
 let selDay  = 0;          // 旅程ビューの選択日インデックス
 let entryFormState = null; // null | {mode:'add'} | {mode:'edit', ei:number}
+let sharedData = null;    // { trip, spots } when viewing a shared link
+let sharedSelDay = 0;
 let selDate = new Date(); selDate.setHours(12,0,0,0);
 const wxCache = new Map();   // "lat,lng" -> {time:[], cloud:[], precip:[]} | "error"
 
@@ -803,6 +830,7 @@ function compassSVG(mwAz, ssAz, srAz){
 
 /* ---------- render ---------- */
 function render(){
+  if(sharedData){ renderSharedView(); return; }
   document.getElementById("datePick").value =
     `${selDate.getFullYear()}-${String(selDate.getMonth()+1).padStart(2,"0")}-${String(selDate.getDate()).padStart(2,"0")}`;
   document.getElementById("dateLabel").textContent = `${fmtDate(selDate)} の夜`;
@@ -942,6 +970,9 @@ function renderTripSelector(){
   trips.forEach(tr =>
     el.appendChild(mk(tr.name, selTrip===tr.id, ()=>{ selTrip=tr.id; selDay=0; render(); }))
   );
+  if(selTrip){
+    el.appendChild(mk("共有リンクをコピー", false, ()=>shareTrip(), "trip-share-btn"));
+  }
   el.appendChild(mk("＋ 旅を追加", false, ()=>{
     const w=document.getElementById("tripAddFormWrap");
     w.style.display = w.style.display==="none" ? "" : "none";
@@ -1243,12 +1274,7 @@ function delEntry(ei){
   saveTrips(); entryFormState=null; renderTripView();
 }
 
-function toggleAstroCard(sp, dateStr, ei){
-  const wrap = document.getElementById(`astro-${ei}`); if(!wrap) return;
-  if(wrap.style.display!=="none"){ wrap.style.display="none"; return; }
-  wrap.style.display="";
-  if(wrap.dataset.built) return;   // すでに描画済み
-  wrap.dataset.built = "1";
+function buildAstroCard(wrap, sp, dateStr){
   if(!sp){ wrap.innerHTML=`<div style="color:var(--faint);font-size:12px">スポットが削除されています</div>`; return; }
   const baseNoon = new Date(dateStr+"T12:00:00");
   const s = sampleNight(sp,baseNoon,2);
@@ -1294,6 +1320,22 @@ function toggleAstroCard(sp, dateStr, ei){
     ${coastal&&tp?`<div class="tidecap">潮位カーブ(モデル予測) ▼干潮 ▲満潮</div><canvas class="tide" width="720" height="46"></canvas>`:""}`;
   drawTimeline(wrap.querySelector("canvas.tl"),s);
   if(tp) drawTide(wrap.querySelector("canvas.tide"),tp,tex,baseNoon);
+}
+function toggleAstroCard(sp, dateStr, ei){
+  const wrap = document.getElementById(`astro-${ei}`); if(!wrap) return;
+  if(wrap.style.display!=="none"){ wrap.style.display="none"; return; }
+  wrap.style.display="";
+  if(wrap.dataset.built) return;
+  wrap.dataset.built = "1";
+  buildAstroCard(wrap, sp, dateStr);
+}
+function toggleSharedAstroCard(sp, dateStr, ei){
+  const wrap = document.getElementById(`sh-astro-${ei}`); if(!wrap) return;
+  if(wrap.style.display!=="none"){ wrap.style.display="none"; return; }
+  wrap.style.display="";
+  if(wrap.dataset.built) return;
+  wrap.dataset.built = "1";
+  buildAstroCard(wrap, sp, dateStr);
 }
 
 function drawTide(cv, pts, extremes, baseNoon){
@@ -1373,6 +1415,168 @@ function delSpot(i){
   spots.splice(i,1); saveSpots(); render();
 }
 
+/* ---------- v5: share ---------- */
+async function shareTrip(){
+  const trip = trips.find(t=>t.id===selTrip); if(!trip) return;
+  const refSpots = spots.filter(sp=>
+    trip.days.some(d=>d.entries.some(e=>e.type==='stay'&&e.spotId===sp.id))
+  );
+  const payload = JSON.stringify({trip, spots:refSpots});
+  let hash;
+  try{
+    const compressed = await deflate(payload);
+    hash = '#t=z:' + toBase64url(compressed);
+  } catch(e){
+    hash = '#t=p:' + toBase64url(new TextEncoder().encode(payload));
+  }
+  const url = location.href.split('#')[0] + hash;
+  if(url.length > 8000){
+    alert(`URLが長すぎます(${url.length}文字)。\nJSONエクスポートで共有してください。`);
+    return;
+  }
+  try{
+    await navigator.clipboard.writeText(url);
+    alert('共有リンクをクリップボードにコピーしました!');
+  } catch(e){
+    prompt('以下のURLをコピーしてください:', url);
+  }
+}
+
+async function handleSharedLink(encoded){
+  try{
+    let payload;
+    if(encoded.startsWith('z:')){
+      payload = await inflate(fromBase64url(encoded.slice(2)));
+    } else if(encoded.startsWith('p:')){
+      payload = new TextDecoder().decode(fromBase64url(encoded.slice(2)));
+    } else {
+      return false;
+    }
+    const data = JSON.parse(payload);
+    if(!data.trip || !Array.isArray(data.spots)) return false;
+    sharedData = data;
+    sharedSelDay = 0;
+    return true;
+  } catch(e){ return false; }
+}
+
+function renderSharedView(){
+  document.getElementById("tripSel").innerHTML = "";
+  document.getElementById("tripAddFormWrap").style.display = "none";
+  document.getElementById("spotsView").style.display = "none";
+  const {trip, spots: shSpots} = sharedData;
+
+  const banner = document.getElementById("banner");
+  banner.className = "banner info";
+  banner.style.display = "";
+  banner.innerHTML = `📤 共有された旅程「${esc(trip.name)}」を表示中
+    <button onclick="importSharedTrip()" style="margin-left:12px;padding:4px 12px;font-size:12px;border:1px solid #2C4BAD;border-radius:6px;background:#fff;color:#2C4BAD;cursor:pointer">自分のアプリに取り込む</button>
+    <button onclick="exitSharedView()" style="margin-left:8px;padding:4px 12px;font-size:12px;border:1px solid #BBC8E8;border-radius:6px;background:#fff;color:#2C4BAD;cursor:pointer">閉じる</button>`;
+
+  const tripView = document.getElementById("tripView");
+  tripView.style.display = "";
+  const tabsEl = document.getElementById("dayTabs"); tabsEl.innerHTML="";
+  trip.days.forEach((day,i)=>{
+    const b = document.createElement("button");
+    b.className = "daytab"+(i===sharedSelDay?" active":"");
+    const d = new Date(day.date+"T12:00:00");
+    b.innerHTML = `Day${i+1}<br><small>${fmtDate(d)}</small>`;
+    b.onclick = ()=>{ sharedSelDay=i; renderSharedView(); };
+    tabsEl.appendChild(b);
+  });
+
+  const listEl = document.getElementById("entryList"); listEl.innerHTML="";
+  const day = trip.days[sharedSelDay];
+  if(!day || day.entries.length===0){
+    const empty = document.createElement("div"); empty.className="trip-empty";
+    empty.textContent = "この日のエントリがまだありません。";
+    listEl.appendChild(empty); return;
+  }
+  const GMAP_MODE = {train:'transit',bus:'transit',car:'driving',walk:'walking',ship:'transit',plane:'transit'};
+  const ul = document.createElement("div"); ul.className="elist";
+  day.entries.forEach((entry,ei)=>{
+    const row = document.createElement("div"); row.className="entry";
+    if(entry.type==="stay"){
+      const sp = shSpots.find(s=>s.id===entry.spotId);
+      const nm = sp ? esc(sp.name) : `<span style="color:var(--faint)">[不明なスポット]</span>`;
+      const timeStr = [entry.arrive,entry.depart].filter(Boolean).join(" – ");
+      row.innerHTML=`
+        <div class="entry-time">${esc(timeStr)}</div>
+        <div class="entry-body">
+          <div class="entry-stay">
+            <div class="nm">${nm}</div>
+            ${entry.memo?`<div class="mo">${esc(entry.memo)}</div>`:""}
+            <div class="astro-wrap" id="sh-astro-${ei}" style="display:none"></div>
+          </div>
+        </div>`;
+      ul.appendChild(row);
+      if(sp) row.querySelector(".entry-stay").onclick = ()=>toggleSharedAstroCard(sp, day.date, ei);
+    } else if(entry.type==="transit"){
+      const icon = MODES[entry.mode]||"→";
+      const dur = calcDur(entry.dep, entry.arr);
+      const gmMode = GMAP_MODE[entry.mode]||'transit';
+      const prevSp = ei>0 && day.entries[ei-1].type==='stay' ? shSpots.find(s=>s.id===day.entries[ei-1].spotId) : null;
+      const nextEntry = day.entries[ei+1];
+      const nextSp = nextEntry?.type==='stay' ? shSpots.find(s=>s.id===nextEntry.spotId) : null;
+      const org = entry.from || (prevSp ? `${prevSp.lat},${prevSp.lng}` : null);
+      const dst = entry.to   || (nextSp ? `${nextSp.lat},${nextSp.lng}` : null);
+      const mlink = (org&&dst) ? `<a href="${mapsUrl(org,dst,gmMode)}" target="_blank" rel="noopener" class="maps-link">🗺 Google マップで経路を確認</a>` : '';
+      row.innerHTML=`
+        <div class="entry-time">${esc(entry.dep||"")}</div>
+        <div class="entry-body">
+          <div class="entry-transit">
+            <div class="tline"><span class="mode-icon">${icon}</span>${esc(entry.line||"")}${dur?` <small style="color:var(--faint)">${dur}</small>`:""}</div>
+            <div class="tleg">${esc(entry.from||"")} → ${esc(entry.to||"")}</div>
+            ${mlink}
+          </div>
+        </div>`;
+      ul.appendChild(row);
+    } else if(entry.type==="note"){
+      row.innerHTML=`
+        <div class="entry-time"></div>
+        <div class="entry-body"><div class="entry-note"><div class="txt">${esc(entry.text||"")}</div></div></div>`;
+      ul.appendChild(row);
+    }
+  });
+  listEl.appendChild(ul);
+}
+
+async function importSharedTrip(){
+  if(!sharedData) return;
+  const {trip: shTrip, spots: shSpots} = sharedData;
+  const spotIdMap = {};
+  shSpots.forEach(shSp=>{
+    const existing = spots.find(sp=>
+      Math.abs(sp.lat-shSp.lat)<=0.0005 && Math.abs(sp.lng-shSp.lng)<=0.0005
+    );
+    if(existing){ spotIdMap[shSp.id]=existing.id; }
+    else{ const ns={...shSp, id:idGen("sp_")}; spots.push(ns); spotIdMap[shSp.id]=ns.id; }
+  });
+  await saveSpots();
+  const newTrip = JSON.parse(JSON.stringify(shTrip));
+  newTrip.id = idGen("tr_");
+  newTrip.days.forEach(day=>day.entries.forEach(e=>{
+    if(e.type==='stay'&&spotIdMap[e.spotId]) e.spotId=spotIdMap[e.spotId];
+  }));
+  trips.push(newTrip); await saveTrips();
+  sharedData=null; sharedSelDay=0;
+  history.replaceState(null,'',location.pathname+location.search);
+  selTrip=newTrip.id; selDay=0;
+  const banner=document.getElementById("banner");
+  banner.className="banner"; banner.style.display="";
+  banner.textContent=`「${newTrip.name}」を取り込みました。`;
+  render();
+  setTimeout(()=>{ banner.style.display="none"; },3000);
+}
+
+function exitSharedView(){
+  sharedData=null; sharedSelDay=0;
+  history.replaceState(null,'',location.pathname+location.search);
+  const banner=document.getElementById("banner");
+  banner.style.display="none"; banner.className="banner";
+  render();
+}
+
 /* ---------- boot ---------- */
 if("serviceWorker" in navigator && location.protocol==="https:"){
   window.addEventListener("load", ()=> navigator.serviceWorker.register("sw.js").catch(()=>{}));
@@ -1386,6 +1590,11 @@ window.addEventListener("load", async ()=>{
   }
   await loadSpots();
   await loadTrips();
+  const hashVal = location.hash.slice(1);
+  if(hashVal.startsWith('t=')){
+    const ok = await handleSharedLink(hashVal.slice(2));
+    if(ok){ renderSharedView(); return; }
+  }
   render();  // まず天文データで即描画
   await Promise.allSettled([...spots.map(fetchWeather), ...spots.map(fetchTide)]);
   const anyWx = [...wxCache.values()].some(v=>v!=="error");
