@@ -419,6 +419,11 @@ else window.SunCalc = SunCalc;
   .addbtn:hover{background:#000}
   .formerr{color:var(--bad);font-size:11px;margin-top:6px;min-height:1em}
 
+  .backup{margin-top:24px;border-top:1px solid var(--line);padding-top:12px;font-size:12px;color:var(--dim)}
+  .backup summary{cursor:pointer;user-select:none;color:var(--faint);font-size:11px}
+  .backup summary:hover{color:var(--dim)}
+  .backup button{font-size:12px;padding:5px 14px;border:1px solid var(--line2);border-radius:6px;background:#fff;cursor:pointer;font-family:var(--sans)}
+  .backup button:hover{border-color:var(--amber);color:var(--amber-deep)}
   footer{margin-top:32px;color:var(--faint);font-size:11px;line-height:1.8}
   .banner{background:#FBEFE6;border:1px solid #E8CDb0;color:var(--amber-deep);
     padding:10px 14px;border-radius:10px;margin-bottom:16px;display:none;font-size:12px}
@@ -544,6 +549,26 @@ else window.SunCalc = SunCalc;
     <div class="daytabs" id="dayTabs"></div>
     <div id="entryList"></div>
   </div>
+
+  <details class="backup">
+    <summary>バックアップ / 復元</summary>
+    <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start">
+      <div>
+        <button onclick="exportJSON()">📥 全データをダウンロード</button>
+      </div>
+      <div>
+        <label style="cursor:pointer">
+          <span style="display:inline-block;padding:5px 14px;border:1px solid var(--line2);border-radius:6px;background:#fff;font-family:var(--sans)">📤 JSONから復元</span>
+          <input type="file" id="importFile" accept=".json" onchange="importJSON(event)" style="display:none">
+        </label>
+        <div style="margin-top:6px;font-size:11px;color:var(--faint)">
+          復元モード:
+          <label style="cursor:pointer"><input type="radio" name="importMode" value="merge" checked> マージ(既存を残す)</label>
+          <label style="margin-left:8px;cursor:pointer"><input type="radio" name="importMode" value="replace"> 置換(全データを上書き)</label>
+        </div>
+      </div>
+    </div>
+  </details>
 
   <footer>
     タイムラインは正午→翌正午。スコアは「天文薄明の完全な闇 × 月明かりの少なさ」による星空適性(月なしの闇3時間で100)。雲量が取得できた夜は「実効」として雲を加味した値も表示します(Open-Meteo・16日先まで)。コンパスは天の川(銀河中心)が最も高くなる方位と、日没・日の出の方位。座標は現地ピンに合わせて微調整を。海に面したスポットは潮位カーブと干潮・満潮を自動表示(Open-Meteo Marine・7日先まで)。潮位は海洋モデルの予測値のため、干潟へ渡る最終判断は気象庁の潮位表(那智勝浦なら「浦神」)で必ずダブルチェックしてください。ホーム画面に追加してアプリとして使えます。圏外では最後に取得した予報を表示します(取得時点に注意)。<span style="font-family:var(--mono)">v4</span>
@@ -1413,6 +1438,43 @@ function delSpot(i){
     : `「${sp.name}」を削除しますか?`;
   if(!confirm(msg)) return;
   spots.splice(i,1); saveSpots(); render();
+}
+
+/* ---------- v5: backup ---------- */
+function exportJSON(){
+  const data = JSON.stringify({spots, trips}, null, 2);
+  const blob = new Blob([data], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const d = new Date();
+  a.href = url;
+  a.download = `rokehan-backup-${d.toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+async function importJSON(event){
+  const file = event.target.files[0]; if(!file) return;
+  try{
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if(!Array.isArray(data.spots)||!Array.isArray(data.trips)){
+      alert('ファイルの形式が正しくありません(spots・trips が必要です)。'); return;
+    }
+    const mode = document.querySelector('input[name="importMode"]:checked')?.value||'merge';
+    if(mode==='replace'){
+      if(!confirm('現在の全データを置き換えます。よろしいですか?')) return;
+      spots=data.spots; trips=data.trips;
+    } else {
+      const sid=new Set(spots.map(s=>s.id));
+      data.spots.forEach(sp=>{ if(!sid.has(sp.id)) spots.push(sp); });
+      const tid=new Set(trips.map(t=>t.id));
+      data.trips.forEach(tr=>{ if(!tid.has(tr.id)) trips.push(tr); });
+    }
+    await saveSpots(); await saveTrips();
+    event.target.value='';
+    render();
+    alert(`インポート完了(${mode==='replace'?'置換':'マージ'})。`);
+  } catch(e){ alert('JSONの読み込みに失敗しました: '+e.message); }
 }
 
 /* ---------- v5: share ---------- */
