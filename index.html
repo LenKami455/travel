@@ -1,0 +1,909 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ロケハンダッシュボード</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#FFFFFF">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="ロケハン">
+<script>
+/* SunCalc v1.9.0 (c) Vladimir Agafonkin, BSD-2-Clause — embedded for offline use */
+/*
+ (c) 2011-2015, Vladimir Agafonkin
+ SunCalc is a JavaScript library for calculating sun/moon position and light phases.
+ https://github.com/mourner/suncalc
+*/
+
+(function () { 'use strict';
+
+// shortcuts for easier to read formulas
+
+var PI   = Math.PI,
+    sin  = Math.sin,
+    cos  = Math.cos,
+    tan  = Math.tan,
+    asin = Math.asin,
+    atan = Math.atan2,
+    acos = Math.acos,
+    rad  = PI / 180;
+
+// sun calculations are based on http://aa.quae.nl/en/reken/zonpositie.html formulas
+
+
+// date/time constants and conversions
+
+var dayMs = 1000 * 60 * 60 * 24,
+    J1970 = 2440588,
+    J2000 = 2451545;
+
+function toJulian(date) { return date.valueOf() / dayMs - 0.5 + J1970; }
+function fromJulian(j)  { return new Date((j + 0.5 - J1970) * dayMs); }
+function toDays(date)   { return toJulian(date) - J2000; }
+
+
+// general calculations for position
+
+var e = rad * 23.4397; // obliquity of the Earth
+
+function rightAscension(l, b) { return atan(sin(l) * cos(e) - tan(b) * sin(e), cos(l)); }
+function declination(l, b)    { return asin(sin(b) * cos(e) + cos(b) * sin(e) * sin(l)); }
+
+function azimuth(H, phi, dec)  { return atan(sin(H), cos(H) * sin(phi) - tan(dec) * cos(phi)); }
+function altitude(H, phi, dec) { return asin(sin(phi) * sin(dec) + cos(phi) * cos(dec) * cos(H)); }
+
+function siderealTime(d, lw) { return rad * (280.16 + 360.9856235 * d) - lw; }
+
+function astroRefraction(h) {
+    if (h < 0) // the following formula works for positive altitudes only.
+        h = 0; // if h = -0.08901179 a div/0 would occur.
+
+    // formula 16.4 of "Astronomical Algorithms" 2nd edition by Jean Meeus (Willmann-Bell, Richmond) 1998.
+    // 1.02 / tan(h + 10.26 / (h + 5.10)) h in degrees, result in arc minutes -> converted to rad:
+    return 0.0002967 / Math.tan(h + 0.00312536 / (h + 0.08901179));
+}
+
+// general sun calculations
+
+function solarMeanAnomaly(d) { return rad * (357.5291 + 0.98560028 * d); }
+
+function eclipticLongitude(M) {
+
+    var C = rad * (1.9148 * sin(M) + 0.02 * sin(2 * M) + 0.0003 * sin(3 * M)), // equation of center
+        P = rad * 102.9372; // perihelion of the Earth
+
+    return M + C + P + PI;
+}
+
+function sunCoords(d) {
+
+    var M = solarMeanAnomaly(d),
+        L = eclipticLongitude(M);
+
+    return {
+        dec: declination(L, 0),
+        ra: rightAscension(L, 0)
+    };
+}
+
+
+var SunCalc = {};
+
+
+// calculates sun position for a given date and latitude/longitude
+
+SunCalc.getPosition = function (date, lat, lng) {
+
+    var lw  = rad * -lng,
+        phi = rad * lat,
+        d   = toDays(date),
+
+        c  = sunCoords(d),
+        H  = siderealTime(d, lw) - c.ra;
+
+    return {
+        azimuth: azimuth(H, phi, c.dec),
+        altitude: altitude(H, phi, c.dec)
+    };
+};
+
+
+// sun times configuration (angle, morning name, evening name)
+
+var times = SunCalc.times = [
+    [-0.833, 'sunrise',       'sunset'      ],
+    [  -0.3, 'sunriseEnd',    'sunsetStart' ],
+    [    -6, 'dawn',          'dusk'        ],
+    [   -12, 'nauticalDawn',  'nauticalDusk'],
+    [   -18, 'nightEnd',      'night'       ],
+    [     6, 'goldenHourEnd', 'goldenHour'  ]
+];
+
+// adds a custom time to the times config
+
+SunCalc.addTime = function (angle, riseName, setName) {
+    times.push([angle, riseName, setName]);
+};
+
+
+// calculations for sun times
+
+var J0 = 0.0009;
+
+function julianCycle(d, lw) { return Math.round(d - J0 - lw / (2 * PI)); }
+
+function approxTransit(Ht, lw, n) { return J0 + (Ht + lw) / (2 * PI) + n; }
+function solarTransitJ(ds, M, L)  { return J2000 + ds + 0.0053 * sin(M) - 0.0069 * sin(2 * L); }
+
+function hourAngle(h, phi, d) { return acos((sin(h) - sin(phi) * sin(d)) / (cos(phi) * cos(d))); }
+function observerAngle(height) { return -2.076 * Math.sqrt(height) / 60; }
+
+// returns set time for the given sun altitude
+function getSetJ(h, lw, phi, dec, n, M, L) {
+
+    var w = hourAngle(h, phi, dec),
+        a = approxTransit(w, lw, n);
+    return solarTransitJ(a, M, L);
+}
+
+
+// calculates sun times for a given date, latitude/longitude, and, optionally,
+// the observer height (in meters) relative to the horizon
+
+SunCalc.getTimes = function (date, lat, lng, height) {
+
+    height = height || 0;
+
+    var lw = rad * -lng,
+        phi = rad * lat,
+
+        dh = observerAngle(height),
+
+        d = toDays(date),
+        n = julianCycle(d, lw),
+        ds = approxTransit(0, lw, n),
+
+        M = solarMeanAnomaly(ds),
+        L = eclipticLongitude(M),
+        dec = declination(L, 0),
+
+        Jnoon = solarTransitJ(ds, M, L),
+
+        i, len, time, h0, Jset, Jrise;
+
+
+    var result = {
+        solarNoon: fromJulian(Jnoon),
+        nadir: fromJulian(Jnoon - 0.5)
+    };
+
+    for (i = 0, len = times.length; i < len; i += 1) {
+        time = times[i];
+        h0 = (time[0] + dh) * rad;
+
+        Jset = getSetJ(h0, lw, phi, dec, n, M, L);
+        Jrise = Jnoon - (Jset - Jnoon);
+
+        result[time[1]] = fromJulian(Jrise);
+        result[time[2]] = fromJulian(Jset);
+    }
+
+    return result;
+};
+
+
+// moon calculations, based on http://aa.quae.nl/en/reken/hemelpositie.html formulas
+
+function moonCoords(d) { // geocentric ecliptic coordinates of the moon
+
+    var L = rad * (218.316 + 13.176396 * d), // ecliptic longitude
+        M = rad * (134.963 + 13.064993 * d), // mean anomaly
+        F = rad * (93.272 + 13.229350 * d),  // mean distance
+
+        l  = L + rad * 6.289 * sin(M), // longitude
+        b  = rad * 5.128 * sin(F),     // latitude
+        dt = 385001 - 20905 * cos(M);  // distance to the moon in km
+
+    return {
+        ra: rightAscension(l, b),
+        dec: declination(l, b),
+        dist: dt
+    };
+}
+
+SunCalc.getMoonPosition = function (date, lat, lng) {
+
+    var lw  = rad * -lng,
+        phi = rad * lat,
+        d   = toDays(date),
+
+        c = moonCoords(d),
+        H = siderealTime(d, lw) - c.ra,
+        h = altitude(H, phi, c.dec),
+        // formula 14.1 of "Astronomical Algorithms" 2nd edition by Jean Meeus (Willmann-Bell, Richmond) 1998.
+        pa = atan(sin(H), tan(phi) * cos(c.dec) - sin(c.dec) * cos(H));
+
+    h = h + astroRefraction(h); // altitude correction for refraction
+
+    return {
+        azimuth: azimuth(H, phi, c.dec),
+        altitude: h,
+        distance: c.dist,
+        parallacticAngle: pa
+    };
+};
+
+
+// calculations for illumination parameters of the moon,
+// based on http://idlastro.gsfc.nasa.gov/ftp/pro/astro/mphase.pro formulas and
+// Chapter 48 of "Astronomical Algorithms" 2nd edition by Jean Meeus (Willmann-Bell, Richmond) 1998.
+
+SunCalc.getMoonIllumination = function (date) {
+
+    var d = toDays(date || new Date()),
+        s = sunCoords(d),
+        m = moonCoords(d),
+
+        sdist = 149598000, // distance from Earth to Sun in km
+
+        phi = acos(sin(s.dec) * sin(m.dec) + cos(s.dec) * cos(m.dec) * cos(s.ra - m.ra)),
+        inc = atan(sdist * sin(phi), m.dist - sdist * cos(phi)),
+        angle = atan(cos(s.dec) * sin(s.ra - m.ra), sin(s.dec) * cos(m.dec) -
+                cos(s.dec) * sin(m.dec) * cos(s.ra - m.ra));
+
+    return {
+        fraction: (1 + cos(inc)) / 2,
+        phase: 0.5 + 0.5 * inc * (angle < 0 ? -1 : 1) / Math.PI,
+        angle: angle
+    };
+};
+
+
+function hoursLater(date, h) {
+    return new Date(date.valueOf() + h * dayMs / 24);
+}
+
+// calculations for moon rise/set times are based on http://www.stargazing.net/kepler/moonrise.html article
+
+SunCalc.getMoonTimes = function (date, lat, lng, inUTC) {
+    var t = new Date(date);
+    if (inUTC) t.setUTCHours(0, 0, 0, 0);
+    else t.setHours(0, 0, 0, 0);
+
+    var hc = 0.133 * rad,
+        h0 = SunCalc.getMoonPosition(t, lat, lng).altitude - hc,
+        h1, h2, rise, set, a, b, xe, ye, d, roots, x1, x2, dx;
+
+    // go in 2-hour chunks, each time seeing if a 3-point quadratic curve crosses zero (which means rise or set)
+    for (var i = 1; i <= 24; i += 2) {
+        h1 = SunCalc.getMoonPosition(hoursLater(t, i), lat, lng).altitude - hc;
+        h2 = SunCalc.getMoonPosition(hoursLater(t, i + 1), lat, lng).altitude - hc;
+
+        a = (h0 + h2) / 2 - h1;
+        b = (h2 - h0) / 2;
+        xe = -b / (2 * a);
+        ye = (a * xe + b) * xe + h1;
+        d = b * b - 4 * a * h1;
+        roots = 0;
+
+        if (d >= 0) {
+            dx = Math.sqrt(d) / (Math.abs(a) * 2);
+            x1 = xe - dx;
+            x2 = xe + dx;
+            if (Math.abs(x1) <= 1) roots++;
+            if (Math.abs(x2) <= 1) roots++;
+            if (x1 < -1) x1 = x2;
+        }
+
+        if (roots === 1) {
+            if (h0 < 0) rise = i + x1;
+            else set = i + x1;
+
+        } else if (roots === 2) {
+            rise = i + (ye < 0 ? x2 : x1);
+            set = i + (ye < 0 ? x1 : x2);
+        }
+
+        if (rise && set) break;
+
+        h0 = h2;
+    }
+
+    var result = {};
+
+    if (rise) result.rise = hoursLater(t, rise);
+    if (set) result.set = hoursLater(t, set);
+
+    if (!rise && !set) result[ye > 0 ? 'alwaysUp' : 'alwaysDown'] = true;
+
+    return result;
+};
+
+
+// export as Node module / AMD module / browser variable
+if (typeof exports === 'object' && typeof module !== 'undefined') module.exports = SunCalc;
+else if (typeof define === 'function' && define.amd) define(SunCalc);
+else window.SunCalc = SunCalc;
+
+}());
+
+</script>
+<style>
+  :root{
+    --bg:#FFFFFF; --card:#FAFAF9; --line:#E7E5E4; --line2:#D6D3D1;
+    --ink:#1C1917; --dim:#78716C; --faint:#A8A29E;
+    --amber:#B07E3E; --amber-deep:#8A5E28; --good:#4A7043; --bad:#B0653F; --dusk:#5A6E8C;
+    --mono:"SF Mono","Menlo","Consolas",ui-monospace,monospace;
+    --sans:"Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);
+       font-size:14px;line-height:1.7;padding:24px 16px 64px}
+  .wrap{max-width:720px;margin:0 auto}
+
+  .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.35em;color:var(--faint)}
+  h1{font-weight:700;font-size:22px;letter-spacing:.02em;margin:4px 0 0}
+  .sub{color:var(--dim);font-size:12px;margin-top:2px}
+  header{padding-bottom:18px;border-bottom:1px solid var(--line);margin-bottom:18px}
+
+  .datebar{display:flex;align-items:center;gap:8px;margin:18px 0 22px;flex-wrap:wrap}
+  .datebar button,.datebar input[type=date]{
+    background:#fff;border:1px solid var(--line2);color:var(--ink);
+    font-family:var(--mono);font-size:13px;padding:7px 12px;border-radius:8px;cursor:pointer}
+  .datebar button:hover{border-color:var(--amber);color:var(--amber-deep)}
+  .datebar button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+  .datelabel{font-size:16px;font-weight:600;margin-left:auto}
+
+  h2{font-size:12px;font-weight:600;letter-spacing:.18em;color:var(--dim);
+     margin:28px 0 10px;display:flex;align-items:center;gap:10px}
+  h2::after{content:"";flex:1;height:1px;background:var(--line)}
+
+  .week{display:flex;flex-direction:column;gap:6px}
+  .weekrow{display:flex;align-items:baseline;gap:10px;background:#fff;
+    border:1px solid var(--line);border-radius:10px;padding:10px 14px;cursor:pointer;
+    transition:border-color .15s}
+  .weekrow:hover{border-color:var(--amber)}
+  .weekrow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+  .weekrow .dt,.weekrow .cl{font-family:var(--mono);font-size:12px;color:var(--dim)}
+  .weekrow .sc{font-family:var(--mono);font-size:16px;width:2.4em;text-align:right;font-weight:600}
+  .sc.hi{color:var(--good)} .sc.mid{color:var(--amber-deep)} .sc.lo{color:var(--bad)}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+        padding:18px 18px 16px;margin-bottom:14px}
+  .cardhead{display:flex;align-items:baseline;gap:10px}
+  .cardhead .nm{font-size:17px;font-weight:700}
+  .cardhead .memo{color:var(--faint);font-size:11px;flex:1;min-width:0;
+        overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .del{background:none;border:none;color:var(--faint);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:6px}
+  .del:hover{color:var(--bad);background:#F5F0EC}
+  .coords{font-family:var(--mono);font-size:10px;color:var(--faint);margin-top:-1px}
+
+  canvas.tl{width:100%;height:56px;display:block;border-radius:8px;margin-top:14px}
+  .ticks{display:flex;justify-content:space-between;font-family:var(--mono);
+         font-size:9px;color:var(--faint);padding:3px 1px 0}
+  .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:var(--dim);margin-top:6px}
+  .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+
+  .tidecap{font-size:10px;letter-spacing:.08em;color:var(--faint);margin-top:12px}
+  canvas.tide{width:100%;height:46px;display:block;margin-top:3px}
+  .body2{display:flex;gap:18px;margin-top:16px;align-items:flex-start}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));
+        gap:9px 14px;flex:1;min-width:0}
+  .cell .k{font-size:10px;letter-spacing:.1em;color:var(--faint)}
+  .cell .v{font-family:var(--mono);font-size:13.5px;margin-top:1px}
+  .cell .v small{color:var(--dim);font-size:11px}
+
+  .compass{flex:0 0 auto;text-align:center}
+  .compass .cap{font-size:10px;letter-spacing:.1em;color:var(--faint);margin-top:4px}
+
+  .scorebox{display:flex;align-items:center;gap:16px;margin-top:16px;
+            border-top:1px dashed var(--line);padding-top:14px;flex-wrap:wrap}
+  .scoreN{font-family:var(--mono);font-size:32px;line-height:1;font-weight:600}
+  .scoreT{font-size:11px;color:var(--dim)}
+  .verdict{font-size:14px;font-weight:700;letter-spacing:.06em}
+  .wx{margin-left:auto;text-align:right}
+  .wx .v{font-family:var(--mono);font-size:14px}
+  .wx .k{font-size:10px;color:var(--faint);letter-spacing:.1em}
+
+  .addform{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+  .addform summary{cursor:pointer;font-size:13px;color:var(--dim);letter-spacing:.06em}
+  .frow{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .frow input{background:var(--card);border:1px solid var(--line2);color:var(--ink);
+     border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--mono)}
+  .frow input[data-f=name]{flex:2;min-width:140px;font-family:var(--sans)}
+  .frow input[data-f=lat],.frow input[data-f=lng]{flex:1;min-width:100px}
+  .frow input[data-f=memo]{flex:3;min-width:180px;font-family:var(--sans)}
+  .addbtn{background:var(--ink);color:#fff;border:none;border-radius:8px;
+     padding:8px 18px;font-size:13px;cursor:pointer;letter-spacing:.08em}
+  .addbtn:hover{background:#000}
+  .formerr{color:var(--bad);font-size:11px;margin-top:6px;min-height:1em}
+
+  footer{margin-top:32px;color:var(--faint);font-size:11px;line-height:1.8}
+  .banner{background:#FBEFE6;border:1px solid #E8CDb0;color:var(--amber-deep);
+    padding:10px 14px;border-radius:10px;margin-bottom:16px;display:none;font-size:12px}
+  @media (max-width:560px){ .body2{flex-direction:column} .compass{align-self:center} }
+</style>
+
+<div class="wrap">
+  <div class="banner" id="banner"></div>
+  <header>
+    <div class="eyebrow">FIELD PLANNER</div>
+    <h1>ロケハンダッシュボード</h1>
+    <div class="sub">星と光の時間割 — 日没・月・天の川・雲</div>
+  </header>
+
+  <div class="datebar">
+    <button onclick="shiftDay(-1)" aria-label="前日">◀</button>
+    <input type="date" id="datePick" onchange="pickDate(this.value)">
+    <button onclick="shiftDay(1)" aria-label="翌日">▶</button>
+    <button onclick="goToday()">今日</button>
+    <div class="datelabel" id="dateLabel"></div>
+  </div>
+
+  <h2>今後7泊のベスト</h2>
+  <div class="week" id="weekList"></div>
+
+  <h2>スポット詳細</h2>
+  <div id="cards"></div>
+
+  <details class="addform">
+    <summary>＋ スポットを追加</summary>
+    <div class="frow">
+      <input data-f="name" placeholder="名前(例: 曽爾高原)">
+      <input data-f="lat"  placeholder="緯度 34.52" inputmode="decimal">
+      <input data-f="lng"  placeholder="経度 136.15" inputmode="decimal">
+    </div>
+    <div class="frow">
+      <input data-f="memo" placeholder="メモ(任意)">
+      <button class="addbtn" onclick="addSpot()">追加</button>
+    </div>
+    <div class="formerr" id="formErr"></div>
+  </details>
+
+  <footer>
+    タイムラインは正午→翌正午。スコアは「天文薄明の完全な闇 × 月明かりの少なさ」による星空適性(月なしの闇3時間で100)。雲量が取得できた夜は「実効」として雲を加味した値も表示します(Open-Meteo・16日先まで)。コンパスは天の川(銀河中心)が最も高くなる方位と、日没・日の出の方位。座標は現地ピンに合わせて微調整を。海に面したスポットは潮位カーブと干潮・満潮を自動表示(Open-Meteo Marine・7日先まで)。潮位は海洋モデルの予測値のため、干潟へ渡る最終判断は気象庁の潮位表(那智勝浦なら「浦神」)で必ずダブルチェックしてください。ホーム画面に追加してアプリとして使えます。圏外では最後に取得した予報を表示します(取得時点に注意)。<span style="font-family:var(--mono)">v4</span>
+  </footer>
+</div>
+
+<script>
+"use strict";
+/* ---------- constants / state ---------- */
+const GC_RA = 266.417*Math.PI/180, GC_DEC = -29.008*Math.PI/180;
+const DIRS = ["北","北北東","北東","東北東","東","東南東","南東","南南東","南","南南西","南西","西南西","西","西北西","北西","北北西"];
+const WD = ["日","月","火","水","木","金","土"];
+const DEFAULT_SPOTS = [
+  {name:"弁天島(那智勝浦)", lat:33.617, lng:135.957, memo:"干潟×星。7/26 深夜の本命"},
+  {name:"四国カルスト",       lat:33.487, lng:132.940, memo:"8月ロードトリップ Day2"},
+  {name:"安居渓谷",           lat:33.607, lng:133.183, memo:"仁淀ブルー Day3 午前"},
+  {name:"淀川河川敷(十三)",   lat:34.715, lng:135.480, memo:"花火・夜景の定点"}
+];
+let spots = [];
+let selDate = new Date(); selDate.setHours(12,0,0,0);
+const wxCache = new Map();   // "lat,lng" -> {time:[], cloud:[], precip:[]} | "error"
+
+/* ---------- storage ---------- */
+const store = {
+  async get(k){
+    if(typeof window.storage !== "undefined" && window.storage){
+      const r = await window.storage.get(k); return r.value;
+    }
+    return localStorage.getItem(k);   // ホスティング(PWA)時
+  },
+  async set(k,v){
+    if(typeof window.storage !== "undefined" && window.storage){
+      await window.storage.set(k,v); return;
+    }
+    localStorage.setItem(k,v);
+  }
+};
+async function loadSpots(){
+  try{
+    spots = JSON.parse(await store.get("spots-v1"));
+    if(!Array.isArray(spots) || !spots.length) throw 0;
+  }catch(e){ spots = DEFAULT_SPOTS.slice(); saveSpots(); }
+}
+async function saveSpots(){
+  try{ await store.set("spots-v1", JSON.stringify(spots)); }catch(e){}
+}
+
+/* ---------- weather (Open-Meteo) ---------- */
+function wxKey(sp){ return sp.lat.toFixed(3)+","+sp.lng.toFixed(3); }
+async function fetchWeather(sp){
+  const key = wxKey(sp);
+  if(wxCache.has(key)) return wxCache.get(key);
+  try{
+    const u = `https://api.open-meteo.com/v1/forecast?latitude=${sp.lat}&longitude=${sp.lng}`
+            + `&hourly=cloudcover,precipitation_probability&timezone=auto&forecast_days=16`;
+    const res = await fetch(u, {signal: AbortSignal.timeout(6000)});
+    if(!res.ok) throw 0;
+    const j = await res.json();
+    const w = {time:j.hourly.time.map(t=>new Date(t).getTime()),
+               cloud:j.hourly.cloudcover, precip:j.hourly.precipitation_probability};
+    wxCache.set(key,w); return w;
+  }catch(e){ wxCache.set(key,"error"); return "error"; }
+}
+function nightWx(sp, baseNoon){ // 20:00-翌04:00 の平均雲量と最大降水確率
+  const w = wxCache.get(wxKey(sp));
+  if(!w || w==="error") return null;
+  const a = baseNoon.getTime()+8*3600e3, b = baseNoon.getTime()+16*3600e3;
+  let cs=[], ps=[];
+  for(let i=0;i<w.time.length;i++)
+    if(w.time[i]>=a && w.time[i]<=b){ cs.push(w.cloud[i]); ps.push(w.precip[i]??0); }
+  if(!cs.length) return null;
+  return {cloud: Math.round(cs.reduce((x,y)=>x+y,0)/cs.length),
+          precip: Math.max(...ps)};
+}
+
+/* ---------- tide (Open-Meteo Marine) ---------- */
+const tideCache = new Map(); // key -> {time:[],h:[]} | "error" | "land"
+async function fetchTide(sp){
+  const key = wxKey(sp);
+  if(tideCache.has(key)) return tideCache.get(key);
+  const tryFetch = async(lat,lng)=>{
+    const u = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lng}`
+            + `&hourly=sea_level_height_msl&timezone=auto&forecast_days=7`;
+    const res = await fetch(u,{signal:AbortSignal.timeout(6000)});
+    if(!res.ok) return null;
+    const j = await res.json();
+    const h = j && j.hourly && j.hourly.sea_level_height_msl;
+    if(!h || h.every(v=>v==null)) return null;
+    return {time:j.hourly.time.map(t=>new Date(t).getTime()), h};
+  };
+  try{
+    let r = await tryFetch(sp.lat,sp.lng);
+    if(!r){ // 陸グリッドに当たった場合、周囲±0.05°(約5km)の海を探す
+      for(const [dy,dx] of [[0.05,0],[-0.05,0],[0,0.05],[0,-0.05],[0.05,0.05],[-0.05,-0.05]]){
+        r = await tryFetch(sp.lat+dy, sp.lng+dx);
+        if(r) break;
+      }
+    }
+    tideCache.set(key, r || "land");
+    return tideCache.get(key);
+  }catch(e){ tideCache.set(key,"error"); return "error"; }
+}
+function tideWindow(sp, baseNoon){
+  const t = tideCache.get(wxKey(sp));
+  if(!t || t==="error" || t==="land") return null;
+  const a = baseNoon.getTime(), b = a+24*3600e3;
+  const pts=[];
+  for(let i=0;i<t.time.length;i++)
+    if(t.time[i]>=a-3600e3 && t.time[i]<=b+3600e3 && t.h[i]!=null)
+      pts.push({t:t.time[i], h:t.h[i]});
+  return pts.length>3 ? pts : null;
+}
+function tideExtremes(pts){ // 隣接3点の放物線補間で分単位に寄せる
+  const out=[];
+  for(let i=1;i<pts.length-1;i++){
+    const p=pts[i-1].h, c=pts[i].h, n=pts[i+1].h;
+    const isMax = c>=p && c>n, isMin = c<=p && c<n;
+    if(isMax||isMin){
+      const denom = p-2*c+n;
+      const off = denom!==0 ? 0.5*(p-n)/denom : 0;
+      out.push({t: pts[i].t + off*3600e3,
+                h: c - 0.25*(p-n)*off,
+                type: isMax?"H":"L"});
+    }
+  }
+  return out;
+}
+
+/* ---------- astronomy ---------- */
+function gcPos(date, lat, lng){
+  const d = date.getTime()/86400000 - 10957.5;
+  const gmst = (280.46061837 + 360.98564736629*d) % 360;
+  const lst = (gmst + lng)*Math.PI/180;
+  const H = lst - GC_RA, phi = lat*Math.PI/180;
+  const alt = Math.asin(Math.sin(phi)*Math.sin(GC_DEC)+Math.cos(phi)*Math.cos(GC_DEC)*Math.cos(H));
+  let az = Math.atan2(Math.sin(H), Math.cos(H)*Math.sin(phi)-Math.tan(GC_DEC)*Math.cos(phi));
+  return {alt: alt*180/Math.PI, az: ((az*180/Math.PI)+180+360)%360};
+}
+function sunAz(date, lat, lng){
+  return ((SunCalc.getPosition(date,lat,lng).azimuth*180/Math.PI)+180+360)%360;
+}
+function dirName(az){ return DIRS[Math.round(az/22.5)%16]; }
+
+function sampleNight(spot, baseNoon, stepMin){
+  const n = Math.round(1440/stepMin);
+  const s = {t:[], sun:[], moon:[], gcA:[], gcZ:[], frac:0};
+  s.frac = SunCalc.getMoonIllumination(new Date(baseNoon.getTime()+12*3600e3)).fraction;
+  for(let i=0;i<=n;i++){
+    const t = new Date(baseNoon.getTime()+i*stepMin*60e3);
+    s.t.push(t);
+    s.sun.push(SunCalc.getPosition(t,spot.lat,spot.lng).altitude*180/Math.PI);
+    s.moon.push(SunCalc.getMoonPosition(t,spot.lat,spot.lng).altitude*180/Math.PI);
+    const g = gcPos(t,spot.lat,spot.lng);
+    s.gcA.push(g.alt); s.gcZ.push(g.az);
+  }
+  return s;
+}
+function weightAt(s,i){
+  if(s.sun[i] > -18) return 0;
+  return s.moon[i] > 0 ? Math.max(0, 1 - s.frac*1.25) : 1;
+}
+function nightScore(s, stepMin){
+  let sum=0;
+  for(let i=0;i<s.t.length;i++) sum += weightAt(s,i)*stepMin/60;
+  return Math.min(100, Math.round(sum/3*100));
+}
+function bestWindow(s){
+  let best=null, cur=null;
+  for(let i=0;i<s.t.length;i++){
+    if(weightAt(s,i) > 0.45){ if(!cur)cur={a:i,b:i}; else cur.b=i; }
+    else if(cur){ if(!best || cur.b-cur.a > best.b-best.a) best=cur; cur=null; }
+  }
+  if(cur && (!best || cur.b-cur.a > best.b-best.a)) best=cur;
+  return best;
+}
+function crossings(arr, th, dir){
+  const out=[];
+  for(let i=1;i<arr.length;i++){
+    if(dir===1 && arr[i-1]<th && arr[i]>=th) out.push(i);
+    if(dir===-1 && arr[i-1]>=th && arr[i]<th) out.push(i);
+  }
+  return out;
+}
+function segs(pred, s){
+  const out=[]; let cur=null;
+  for(let i=0;i<s.t.length;i++){
+    if(pred(i)){ if(!cur)cur={a:i,b:i}; else cur.b=i; }
+    else if(cur){ out.push(cur); cur=null; }
+  }
+  if(cur) out.push(cur);
+  return out;
+}
+
+/* ---------- formatting ---------- */
+const hm = t => t.toTimeString().slice(0,5);
+const fmtI = (s,i) => i==null ? "—" : hm(s.t[i]);
+function fmtDate(d){ return `${d.getMonth()+1}/${d.getDate()}(${WD[d.getDay()]})`; }
+function verdictOf(sc){
+  return sc>=80 ? ["絶好","hi"] : sc>=60 ? ["良","hi"] : sc>=40 ? ["条件付き","mid"] : ["月と相談","lo"];
+}
+function esc(t){ return String(t).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+/* ---------- compass svg ---------- */
+function compassSVG(mwAz, ssAz, srAz){
+  const R=34, C=42, pt=(az,r)=>{
+    const a=(az-90)*Math.PI/180;
+    return [C+r*Math.cos(a), C+r*Math.sin(a)];
+  };
+  let ticks="";
+  for(let a=0;a<360;a+=45){
+    const [x1,y1]=pt(a,R), [x2,y2]=pt(a,R-4);
+    ticks+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#D6D3D1" stroke-width="1.2"/>`;
+  }
+  let needle="";
+  if(mwAz!=null){
+    const [x,y]=pt(mwAz,R-9), [bx,by]=pt(mwAz+180,10);
+    needle=`<line x1="${bx}" y1="${by}" x2="${x}" y2="${y}" stroke="#B07E3E" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="${x}" cy="${y}" r="3.2" fill="#B07E3E"/>`;
+  }
+  const dot=(az,color)=>{ if(az==null)return""; const [x,y]=pt(az,R); 
+    return `<circle cx="${x}" cy="${y}" r="2.6" fill="${color}"/>`; };
+  return `<svg width="84" height="84" viewBox="0 0 84 84" role="img" aria-label="方位コンパス">
+    <circle cx="${C}" cy="${C}" r="${R}" fill="#fff" stroke="#E7E5E4" stroke-width="1.5"/>
+    ${ticks}
+    <text x="${C}" y="13" text-anchor="middle" font-size="9" fill="#78716C" font-family="sans-serif">N</text>
+    ${dot(ssAz,"#B0653F")}${dot(srAz,"#5A6E8C")}
+    ${needle}
+    <circle cx="${C}" cy="${C}" r="2" fill="#1C1917"/>
+  </svg>`;
+}
+
+/* ---------- render ---------- */
+function render(){
+  document.getElementById("datePick").value =
+    `${selDate.getFullYear()}-${String(selDate.getMonth()+1).padStart(2,"0")}-${String(selDate.getDate()).padStart(2,"0")}`;
+  document.getElementById("dateLabel").textContent = `${fmtDate(selDate)} の夜`;
+  renderWeek(); renderCards();
+}
+
+function renderWeek(){
+  const el = document.getElementById("weekList"); el.innerHTML="";
+  const rows = spots.map((sp)=>{
+    let best={eff:-1, sc:0, d:null, cloud:null};
+    for(let k=0;k<7;k++){
+      const d = new Date(selDate.getTime()+k*86400e3);
+      const s = sampleNight(sp,d,6);
+      const sc = nightScore(s,6);
+      const wx = nightWx(sp,d);
+      const eff = wx ? Math.round(sc*(1-wx.cloud/100)) : sc;
+      if(eff>best.eff) best={eff, sc, d, cloud: wx?wx.cloud:null};
+    }
+    return {sp,...best};
+  }).sort((a,b)=>b.eff-a.eff);
+  for(const r of rows){
+    const [,cls] = verdictOf(r.eff);
+    const row = document.createElement("div");
+    row.className="weekrow"; row.tabIndex=0;
+    row.innerHTML = `<span class="nm">${esc(r.sp.name)}</span>
+      ${r.cloud!=null?`<span class="cl">☁${r.cloud}%</span>`:""}
+      <span class="dt">${fmtDate(r.d)}</span><span class="sc ${cls}">${r.eff}</span>`;
+    const jump = ()=>{ selDate=new Date(r.d); render(); window.scrollTo({top:0}); };
+    row.onclick=jump; row.onkeydown=e=>{if(e.key==="Enter")jump();};
+    el.appendChild(row);
+  }
+}
+
+function renderCards(){
+  const el = document.getElementById("cards"); el.innerHTML="";
+  spots.forEach((sp,si)=>{
+    const s = sampleNight(sp,selDate,2);
+    const sc = nightScore(s,2);
+    const wx = nightWx(sp,selDate);
+    const eff = wx ? Math.round(sc*(1-wx.cloud/100)) : sc;
+    const [vTxt,vCls] = verdictOf(eff);
+
+    const sunset  = crossings(s.sun,-0.833,-1)[0];
+    const sunrise = crossings(s.sun,-0.833, 1)[0];
+    const gh = segs(i=> s.sun[i]>-4 && s.sun[i]<6, s);
+    const bh = segs(i=> s.sun[i]>-8 && s.sun[i]<=-4, s);
+    const half = s.t.length/2;
+    const ghE = gh.find(g=>g.a<half), ghM = gh.find(g=>g.a>=half);
+    const bhE = bh.find(g=>g.a<half), bhM = bh.find(g=>g.a>=half);
+    const mrise = crossings(s.moon,0,1)[0], mset = crossings(s.moon,0,-1)[0];
+    const gcSeg = segs(i=> s.sun[i]<-18 && s.gcA[i]>15, s);
+    let gcTxt="この夜は圏外", gcSub="", mwAz=null;
+    if(gcSeg.length){
+      const g = gcSeg.reduce((a,b)=> (b.b-b.a>a.b-a.a?b:a));
+      let mi=g.a; for(let i=g.a;i<=g.b;i++) if(s.gcA[i]>s.gcA[mi]) mi=i;
+      gcTxt = `${fmtI(s,g.a)}–${fmtI(s,g.b)}`;
+      gcSub = `最高 ${Math.round(s.gcA[mi])}° ${dirName(s.gcZ[mi])}`;
+      mwAz = s.gcZ[mi];
+    }
+    const bw = bestWindow(s);
+    const tc = tideCache.get(wxKey(sp));
+    const coastal = tc && tc!=="error" && tc!=="land";
+    const tp = coastal ? tideWindow(sp,selDate) : null;
+    const tex = tp ? tideExtremes(tp) : [];
+    const lows = tex.filter(e=>e.type==="L"), highs = tex.filter(e=>e.type==="H");
+    const ssAz = sunset!=null ? sunAz(s.t[sunset],sp.lat,sp.lng) : null;
+    const srAz = sunrise!=null? sunAz(s.t[sunrise],sp.lat,sp.lng): null;
+
+    const card = document.createElement("div"); card.className="card";
+    card.innerHTML = `
+      <div class="cardhead">
+        <span class="nm">${esc(sp.name)}</span>
+        <span class="memo">${esc(sp.memo||"")}</span>
+        <button class="del" title="削除" onclick="delSpot(${si})">×</button>
+      </div>
+      <div class="coords">${sp.lat.toFixed(3)}, ${sp.lng.toFixed(3)}</div>
+      <canvas class="tl" width="720" height="56"></canvas>
+      <div class="ticks"><span>12</span><span>15</span><span>18</span><span>21</span><span>0</span><span>3</span><span>6</span><span>9</span><span>12</span></div>
+      <div class="legend">
+        <span><i style="background:rgba(176,126,62,.7)"></i>ゴールデン</span>
+        <span><i style="background:rgba(90,110,140,.7)"></i>ブルー</span>
+        <span><i style="background:#BFB9AE"></i>月が出ている</span>
+        <span><i style="background:#B07E3E"></i>天の川(高度15°+)</span>
+      </div>
+      ${coastal?`<div class="tidecap">潮位カーブ(モデル予測・平均海面基準) ▼干潮 ▲満潮</div>
+      <canvas class="tide" width="720" height="46"></canvas>`:""}
+      <div class="body2">
+        <div class="grid">
+          <div class="cell"><div class="k">日の入 / 日の出</div><div class="v">${fmtI(s,sunset)} / ${fmtI(s,sunrise)}</div></div>
+          <div class="cell"><div class="k">夕GH / 夕BH</div><div class="v">${ghE?fmtI(s,ghE.a)+"–"+fmtI(s,ghE.b):"—"} <small>/ ${bhE?fmtI(s,bhE.a)+"–"+fmtI(s,bhE.b):"—"}</small></div></div>
+          <div class="cell"><div class="k">朝BH / 朝GH</div><div class="v">${bhM?fmtI(s,bhM.a)+"–"+fmtI(s,bhM.b):"—"} <small>/ ${ghM?fmtI(s,ghM.a)+"–"+fmtI(s,ghM.b):"—"}</small></div></div>
+          <div class="cell"><div class="k">月の出 / 月の入</div><div class="v">${fmtI(s,mrise)} / ${fmtI(s,mset)} <small>輝面 ${Math.round(s.frac*100)}%</small></div></div>
+          <div class="cell"><div class="k">天の川が狙える帯</div><div class="v">${gcTxt} <small>${gcSub}</small></div></div>
+          <div class="cell"><div class="k">ベスト帯(月・闇込み)</div><div class="v">${bw?fmtI(s,bw.a)+"–"+fmtI(s,bw.b):"—"}</div></div>
+          ${coastal?`<div class="cell"><div class="k">干潮 / 満潮</div><div class="v">${tp?(lows.map(e=>hm(new Date(e.t))).join("・")||"—"):"範囲外"} <small>/ ${tp?(highs.map(e=>hm(new Date(e.t))).join("・")||"—"):"7日先まで"}</small></div></div>`:""}
+        </div>
+        <div class="compass">
+          ${compassSVG(mwAz, ssAz, srAz)}
+          <div class="cap">● 天の川 ・<span style="color:#B0653F">●</span> 日没 ・<span style="color:#5A6E8C">●</span> 日出</div>
+        </div>
+      </div>
+      <div class="scorebox">
+        <div class="scoreN sc ${vCls}">${eff}</div>
+        <div>
+          <div class="verdict">${vTxt}</div>
+          <div class="scoreT">星空適性${wx?"(雲を加味)":""} / 100</div>
+        </div>
+        <div class="wx">
+          <div class="v">${wx? "☁"+wx.cloud+"% <small style='color:var(--dim)'>雨"+wx.precip+"%</small>" : "—"}</div>
+          <div class="k">${wx? "夜間平均の雲量 / 天文のみ "+sc : "雲量データなし"}</div>
+        </div>
+      </div>`;
+    el.appendChild(card);
+    drawTimeline(card.querySelector("canvas.tl"), s);
+    if(tp) drawTide(card.querySelector("canvas.tide"), tp, tex, selDate);
+  });
+}
+
+function drawTide(cv, pts, extremes, baseNoon){
+  if(!cv) return;
+  const ctx=cv.getContext("2d"); const W=cv.width, H=cv.height;
+  const t0=baseNoon.getTime(), span=24*3600e3;
+  const hs=pts.map(p=>p.h);
+  const hmin=Math.min(...hs), hmax=Math.max(...hs), pad=(hmax-hmin)*0.18||0.1;
+  const X=t=>(t-t0)/span*W;
+  const Y=h=>H-6-((h-hmin+pad)/(hmax-hmin+2*pad))*(H-14);
+  ctx.beginPath();
+  pts.forEach((p,i)=> i? ctx.lineTo(X(p.t),Y(p.h)) : ctx.moveTo(X(p.t),Y(p.h)));
+  ctx.lineTo(X(pts[pts.length-1].t),H); ctx.lineTo(X(pts[0].t),H); ctx.closePath();
+  ctx.fillStyle="rgba(90,110,140,.10)"; ctx.fill();
+  ctx.beginPath();
+  pts.forEach((p,i)=> i? ctx.lineTo(X(p.t),Y(p.h)) : ctx.moveTo(X(p.t),Y(p.h)));
+  ctx.strokeStyle="#5A6E8C"; ctx.lineWidth=1.6; ctx.stroke();
+  ctx.font="9px "+getComputedStyle(document.body).getPropertyValue("--mono");
+  ctx.textAlign="center";
+  for(const e of extremes){
+    const x=X(e.t), y=Y(e.h);
+    if(x<10||x>W-10) continue;
+    if(e.type==="L"){
+      ctx.fillStyle="#B0653F";
+      ctx.fillText("▼"+hm(new Date(e.t)), x, Math.min(H-2,y+13));
+    }else{
+      ctx.fillStyle="#78716C";
+      ctx.fillText("▲"+hm(new Date(e.t)), x, Math.max(9,y-5));
+    }
+  }
+}
+
+function drawTimeline(cv, s){
+  const ctx = cv.getContext("2d");
+  const W=cv.width, H=cv.height, n=s.t.length;
+  for(let i=0;i<n;i++){
+    const x = Math.floor(i/(n-1)*W), w = Math.ceil(W/(n-1))+1;
+    const a = s.sun[i];
+    let base = a>0? "#F2EEE7" : a>-6? "#CFC8BB" : a>-12? "#8E8579" : a>-18? "#4E4740" : "#211C18";
+    ctx.fillStyle = base; ctx.fillRect(x,0,w,H);
+    if(a>-4 && a<6){ ctx.fillStyle="rgba(176,126,62,.45)"; ctx.fillRect(x,0,w,H); }
+    else if(a>-8 && a<=-4){ ctx.fillStyle="rgba(90,110,140,.40)"; ctx.fillRect(x,0,w,H); }
+    if(s.moon[i]>0){ ctx.fillStyle=`rgba(255,255,255,${0.3+0.5*s.frac})`; ctx.fillRect(x,3,w,4); }
+    if(s.sun[i]<-18 && s.gcA[i]>15){ ctx.fillStyle="#B07E3E"; ctx.fillRect(x,H-7,w,4); }
+  }
+  ctx.strokeStyle="rgba(120,110,100,.35)";
+  [6,12,18].forEach(h=>{ const x=Math.floor(h/24*W)+.5;
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); });
+}
+
+/* ---------- actions ---------- */
+function shiftDay(k){ selDate = new Date(selDate.getTime()+k*86400e3); render(); }
+function goToday(){ selDate = new Date(); selDate.setHours(12,0,0,0); render(); }
+function pickDate(v){ if(!v)return; const [y,m,d]=v.split("-").map(Number);
+  selDate = new Date(y,m-1,d,12,0,0); render(); }
+function addSpot(){
+  const q = f => document.querySelector(`.addform input[data-f=${f}]`);
+  const name=q("name").value.trim(), lat=parseFloat(q("lat").value), lng=parseFloat(q("lng").value);
+  const err=document.getElementById("formErr");
+  if(!name || !isFinite(lat) || !isFinite(lng) || Math.abs(lat)>90 || Math.abs(lng)>180){
+    err.textContent="名前と、有効な緯度(±90)・経度(±180)を入れてください。"; return;
+  }
+  err.textContent="";
+  const sp={name, lat, lng, memo:q("memo").value.trim()};
+  spots.push(sp);
+  ["name","lat","lng","memo"].forEach(f=>q(f).value="");
+  saveSpots(); render();
+  Promise.allSettled([fetchWeather(sp), fetchTide(sp)]).then(render);
+}
+function delSpot(i){
+  if(!confirm(`「${spots[i].name}」を削除しますか?`)) return;
+  spots.splice(i,1); saveSpots(); render();
+}
+
+/* ---------- boot ---------- */
+if("serviceWorker" in navigator && location.protocol==="https:"){
+  window.addEventListener("load", ()=> navigator.serviceWorker.register("sw.js").catch(()=>{}));
+}
+window.addEventListener("load", async ()=>{
+  if(typeof SunCalc==="undefined"){
+    const b=document.getElementById("banner");
+    b.style.display="block";
+    b.textContent="天文計算ライブラリの読み込みに失敗しました。ファイルが完全か確認してください。";
+    return;
+  }
+  await loadSpots();
+  render();  // まず天文データで即描画
+  await Promise.allSettled([...spots.map(fetchWeather), ...spots.map(fetchTide)]);
+  const anyWx = [...wxCache.values()].some(v=>v!=="error");
+  const anyTd = [...tideCache.values()].some(v=>v!=="error");
+  if(!anyWx && !anyTd){
+    const b=document.getElementById("banner");
+    b.style.display="block";
+    b.textContent="外部データ(雲量・潮位)を取得できませんでした(この環境では外部通信が制限されている可能性があります)。ダウンロードしてブラウザで開くと有効になります。天文データはこのまま使えます。";
+  }
+  render();  // 天気・潮汐を反映して再描画
+});
+</script>
