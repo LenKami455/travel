@@ -641,14 +641,48 @@ async function loadSpots(){
     spots = JSON.parse(await store.get("spots-v1"));
     if(!Array.isArray(spots) || !spots.length) throw 0;
   }catch(e){ spots = DEFAULT_SPOTS.slice(); }
-  // migration: idのないスポットに sp_ + 6桁英数字を付与(冪等)
+  // migration: idのないスポットにsp_付与(v5)、shotsのないスポットに[](v6) — 冪等
   let migrated = false;
-  spots.forEach(sp => { if(!sp.id){ sp.id = idGen("sp_"); migrated = true; } });
+  spots.forEach(sp => {
+    if(!sp.id){ sp.id = idGen("sp_"); migrated = true; }
+    if(!sp.shots){ sp.shots = []; migrated = true; }
+  });
   if(migrated) await saveSpots();
 }
 async function saveSpots(){
   try{ await store.set("spots-v1", JSON.stringify(spots)); }catch(e){}
 }
+
+/* ---------- v6: shots CRUD ---------- */
+function addShot(spotId, data){
+  const sp = spots.find(s=>s.id===spotId); if(!sp) return null;
+  const shot = {
+    id: idGen("shot_"),
+    title: data.title||"",
+    status: "planned",
+    note: data.note||"",
+    gear: data.gear||"",
+    tripId: data.tripId||null,
+    date: data.date||null,
+    fieldFlag: false
+  };
+  sp.shots.push(shot); saveSpots();
+  return shot;
+}
+function editShot(spotId, shotId, updates){
+  const sp = spots.find(s=>s.id===spotId); if(!sp) return;
+  const shot = sp.shots.find(s=>s.id===shotId); if(!shot) return;
+  Object.assign(shot, updates);
+  saveSpots();
+}
+function delShot(spotId, shotId){
+  const sp = spots.find(s=>s.id===spotId); if(!sp) return;
+  const shot = sp.shots.find(s=>s.id===shotId);
+  if(!shot || !confirm(`「${shot.title||'このショット'}」を削除しますか?`)) return;
+  sp.shots = sp.shots.filter(s=>s.id!==shotId);
+  saveSpots();
+}
+
 async function loadTrips(){
   try{
     trips = JSON.parse(await store.get("trips-v1"));
@@ -1433,8 +1467,12 @@ function addSpot(){
 function delSpot(i){
   const sp = spots[i];
   const inUse = trips.some(tr=>tr.days.some(d=>d.entries.some(e=>e.type==="stay"&&e.spotId===sp.id)));
-  const msg = inUse
-    ? `「${sp.name}」は旅程で使用中です。それでも削除しますか?`
+  const hasShots = sp.shots && sp.shots.length > 0;
+  const parts = [];
+  if(inUse) parts.push("旅程で使用中");
+  if(hasShots) parts.push(`ショットが${sp.shots.length}件あります`);
+  const msg = parts.length
+    ? `「${sp.name}」は${parts.join("、")}。削除するとショットも消えます。それでも削除しますか?`
     : `「${sp.name}」を削除しますか?`;
   if(!confirm(msg)) return;
   spots.splice(i,1); saveSpots(); render();
