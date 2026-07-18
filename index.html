@@ -475,6 +475,11 @@ else window.SunCalc = SunCalc;
   .elist-add button{background:none;border:1px dashed var(--line2);color:var(--faint);
     font-size:13px;padding:10px;border-radius:10px;cursor:pointer;width:100%;transition:border-color .15s,color .15s}
   .elist-add button:hover{border-color:var(--amber);color:var(--amber-deep)}
+  .maps-link{display:inline-block;font-size:11px;color:var(--dusk);text-decoration:none;margin-top:4px}
+  .maps-link:hover{text-decoration:underline;color:var(--amber-deep)}
+  .route-conn{text-align:center;padding:6px 0;font-size:11px;color:var(--faint)}
+  .route-conn a{color:var(--dusk);text-decoration:none}
+  .route-conn a:hover{text-decoration:underline;color:var(--amber-deep)}
   @media (max-width:560px){ .body2{flex-direction:column} .compass{align-self:center} }
 </style>
 
@@ -763,6 +768,9 @@ function calcDur(dep, arr){
   const h=Math.floor(min/60), m=min%60;
   return h>0 ? `${h}h${m?m+"m":""}` : `${m}m`;
 }
+function mapsUrl(origin, dest, travelmode='transit'){
+  return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest)}&travelmode=${travelmode}`;
+}
 
 /* ---------- compass svg ---------- */
 function compassSVG(mwAz, ssAz, srAz){
@@ -993,9 +1001,15 @@ function renderTripView(){
   </div>`;
 
   if(n > 0){
+    const GMAP_MODE = {train:'transit',bus:'transit',car:'driving',walk:'walking',ship:'transit',plane:'transit'};
     const ul = document.createElement("div"); ul.className="elist";
     day.entries.forEach((entry,ei)=>{
       const row = document.createElement("div"); row.className="entry";
+      const prevSp = ei>0 && day.entries[ei-1].type==='stay'
+        ? spots.find(s=>s.id===day.entries[ei-1].spotId) : null;
+      const nextEntry = day.entries[ei+1];
+      const nextSp = nextEntry?.type==='stay' ? spots.find(s=>s.id===nextEntry.spotId) : null;
+
       if(entry.type==="stay"){
         const sp = spots.find(s=>s.id===entry.spotId);
         const nm = sp ? esc(sp.name) : `<span style="color:var(--faint)">[削除済みスポット]</span>`;
@@ -1012,15 +1026,29 @@ function renderTripView(){
           </div>`;
         ul.appendChild(row);
         row.querySelector(".entry-stay").onclick = ()=>toggleAstroCard(sp, day.date, ei);
+        // 次エントリも stay かつ両スポット座標あり → 経路コネクタを挿入
+        if(nextEntry?.type==='stay' && sp && nextSp){
+          const conn = document.createElement("div"); conn.className="route-conn";
+          conn.innerHTML=`<a href="${mapsUrl(`${sp.lat},${sp.lng}`,`${nextSp.lat},${nextSp.lng}`,'transit')}" target="_blank" rel="noopener">🗺 ${esc(sp.name)} → ${esc(nextSp.name)} の経路を調べる</a>`;
+          ul.appendChild(conn);
+        }
       } else if(entry.type==="transit"){
         const icon = MODES[entry.mode]||"→";
         const dur = calcDur(entry.dep, entry.arr);
+        const gmMode = GMAP_MODE[entry.mode]||'transit';
+        // origin/dest: テキストがあればそれを使い、なければ隣接 stay の座標にフォールバック
+        const org = entry.from || (prevSp ? `${prevSp.lat},${prevSp.lng}` : null);
+        const dst = entry.to   || (nextSp ? `${nextSp.lat},${nextSp.lng}` : null);
+        const mlink = (org && dst)
+          ? `<a href="${mapsUrl(org,dst,gmMode)}" target="_blank" rel="noopener" class="maps-link">🗺 Google マップで経路を確認</a>`
+          : '';
         row.innerHTML=`
           <div class="entry-time">${esc(entry.dep||"")}</div>
           <div class="entry-body">
             <div class="entry-transit">
               <div class="tline"><span class="mode-icon">${icon}</span>${esc(entry.line||"")}${dur?` <small style="color:var(--faint)">${dur}</small>`:""}</div>
               <div class="tleg">${esc(entry.from||"")} → ${esc(entry.to||"")}</div>
+              ${mlink}
             </div>
             ${mkActions(ei)}
           </div>`;
