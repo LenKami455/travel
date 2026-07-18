@@ -422,6 +422,43 @@ else window.SunCalc = SunCalc;
   footer{margin-top:32px;color:var(--faint);font-size:11px;line-height:1.8}
   .banner{background:#FBEFE6;border:1px solid #E8CDb0;color:var(--amber-deep);
     padding:10px 14px;border-radius:10px;margin-bottom:16px;display:none;font-size:12px}
+  /* v5 ---- trip selector */
+  .trip-sel{display:flex;gap:8px;flex-wrap:wrap;align-items:center;
+    margin:16px 0 0;padding-bottom:14px;border-bottom:1px solid var(--line)}
+  .trip-sel button{background:#fff;border:1px solid var(--line2);color:var(--dim);
+    font-family:var(--sans);font-size:12px;padding:5px 12px;border-radius:20px;cursor:pointer;
+    transition:border-color .15s,background .15s,color .15s}
+  .trip-sel button:hover{border-color:var(--amber);color:var(--amber-deep)}
+  .trip-sel button.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .trip-add-btn{border-style:dashed!important;color:var(--faint)!important}
+  .trip-add-btn:hover{border-color:var(--amber)!important;color:var(--amber-deep)!important}
+  .trip-form{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:10px 0 0}
+  /* v5 ---- day tabs */
+  .daytabs{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0 12px}
+  .daytab{background:#fff;border:1px solid var(--line2);color:var(--dim);font-family:var(--mono);
+    font-size:11px;padding:6px 14px;border-radius:8px;cursor:pointer;text-align:center;
+    line-height:1.5;transition:border-color .15s,background .15s,color .15s}
+  .daytab:hover{border-color:var(--amber)}
+  .daytab.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  /* v5 ---- entry list */
+  .elist{display:flex;flex-direction:column;gap:6px}
+  .entry{display:flex;gap:12px;align-items:flex-start}
+  .entry-time{font-family:var(--mono);font-size:11px;color:var(--dim);
+    min-width:82px;padding-top:11px;white-space:nowrap;flex-shrink:0}
+  .entry-body{flex:1;min-width:0}
+  .entry-stay{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:10px 12px;cursor:pointer;transition:border-color .15s}
+  .entry-stay:hover{border-color:var(--amber)}
+  .entry-stay .nm{font-weight:600;font-size:14px}
+  .entry-stay .mo{color:var(--dim);font-size:12px;margin-top:2px}
+  .astro-wrap{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
+  .entry-transit{padding:8px 0 8px 12px;border-left:2px solid var(--line2)}
+  .entry-transit .tline{font-size:13px}
+  .entry-transit .tleg{color:var(--dim);font-size:11px;font-family:var(--mono);margin-top:2px}
+  .mode-icon{display:inline-block;width:20px}
+  .entry-note{padding:6px 0 6px 12px;border-left:2px dashed var(--line2)}
+  .entry-note .txt{color:var(--dim);font-size:13px}
+  .trip-empty{color:var(--faint);font-size:13px;text-align:center;padding:40px 0;line-height:2}
   @media (max-width:560px){ .body2{flex-direction:column} .compass{align-self:center} }
 </style>
 
@@ -433,6 +470,23 @@ else window.SunCalc = SunCalc;
     <div class="sub">星と光の時間割 — 日没・月・天の川・雲</div>
   </header>
 
+  <div class="trip-sel" id="tripSel"></div>
+  <div id="tripAddFormWrap" style="display:none">
+    <div class="trip-form">
+      <div class="frow">
+        <input id="tafName" placeholder="旅の名前(例: 那智勝浦・太地)" style="flex:3;min-width:180px;font-family:var(--sans)">
+        <input id="tafStart" type="date" style="flex:1;min-width:130px">
+        <input id="tafDays" type="number" min="1" max="14" value="3" placeholder="日数" style="flex:0 0 70px">
+      </div>
+      <div class="frow" style="margin-top:6px">
+        <button class="addbtn" onclick="addTrip()">追加</button>
+        <button onclick="document.getElementById('tripAddFormWrap').style.display='none'" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:13px;padding:8px 10px">キャンセル</button>
+      </div>
+      <div class="formerr" id="tripFormErr"></div>
+    </div>
+  </div>
+
+  <div id="spotsView">
   <div class="datebar">
     <button onclick="shiftDay(-1)" aria-label="前日">◀</button>
     <input type="date" id="datePick" onchange="pickDate(this.value)">
@@ -460,6 +514,12 @@ else window.SunCalc = SunCalc;
     </div>
     <div class="formerr" id="formErr"></div>
   </details>
+  </div><!-- /spotsView -->
+
+  <div id="tripView" style="display:none">
+    <div class="daytabs" id="dayTabs"></div>
+    <div id="entryList"></div>
+  </div>
 
   <footer>
     タイムラインは正午→翌正午。スコアは「天文薄明の完全な闇 × 月明かりの少なさ」による星空適性(月なしの闇3時間で100)。雲量が取得できた夜は「実効」として雲を加味した値も表示します(Open-Meteo・16日先まで)。コンパスは天の川(銀河中心)が最も高くなる方位と、日没・日の出の方位。座標は現地ピンに合わせて微調整を。海に面したスポットは潮位カーブと干潮・満潮を自動表示(Open-Meteo Marine・7日先まで)。潮位は海洋モデルの予測値のため、干潟へ渡る最終判断は気象庁の潮位表(那智勝浦なら「浦神」)で必ずダブルチェックしてください。ホーム画面に追加してアプリとして使えます。圏外では最後に取得した予報を表示します(取得時点に注意)。<span style="font-family:var(--mono)">v4</span>
@@ -482,6 +542,8 @@ const DEFAULT_SPOTS = [
 ];
 let spots = [];
 let trips = [];
+let selTrip = null;  // null = すべてのスポット, string = trip.id
+let selDay  = 0;     // 旅程ビューの選択日インデックス
 let selDate = new Date(); selDate.setHours(12,0,0,0);
 const wxCache = new Map();   // "lat,lng" -> {time:[], cloud:[], precip:[]} | "error"
 
@@ -677,6 +739,13 @@ function verdictOf(sc){
   return sc>=80 ? ["絶好","hi"] : sc>=60 ? ["良","hi"] : sc>=40 ? ["条件付き","mid"] : ["月と相談","lo"];
 }
 function esc(t){ return String(t).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function calcDur(dep, arr){
+  if(!dep || !arr) return "";
+  const [dh,dm] = dep.split(":").map(Number), [ah,am] = arr.split(":").map(Number);
+  let min = (ah*60+am)-(dh*60+dm); if(min<0) min+=1440;
+  const h=Math.floor(min/60), m=min%60;
+  return h>0 ? `${h}h${m?m+"m":""}` : `${m}m`;
+}
 
 /* ---------- compass svg ---------- */
 function compassSVG(mwAz, ssAz, srAz){
@@ -712,7 +781,16 @@ function render(){
   document.getElementById("datePick").value =
     `${selDate.getFullYear()}-${String(selDate.getMonth()+1).padStart(2,"0")}-${String(selDate.getDate()).padStart(2,"0")}`;
   document.getElementById("dateLabel").textContent = `${fmtDate(selDate)} の夜`;
-  renderWeek(); renderCards();
+  renderTripSelector();
+  if(selTrip){
+    document.getElementById("spotsView").style.display = "none";
+    document.getElementById("tripView").style.display  = "";
+    renderTripView();
+  } else {
+    document.getElementById("spotsView").style.display = "";
+    document.getElementById("tripView").style.display  = "none";
+    renderWeek(); renderCards();
+  }
 }
 
 function renderWeek(){
@@ -827,6 +905,164 @@ function renderCards(){
   });
 }
 
+/* ---------- v5: trip selector ---------- */
+function renderTripSelector(){
+  const el = document.getElementById("tripSel"); el.innerHTML = "";
+  const mk = (label, active, onclick, extra="") => {
+    const b = document.createElement("button");
+    b.textContent = label; if(active) b.classList.add("active");
+    if(extra) b.classList.add(extra); b.onclick = onclick; return b;
+  };
+  el.appendChild(mk("すべてのスポット", !selTrip, ()=>{ selTrip=null; selDay=0; render(); }));
+  trips.forEach(tr =>
+    el.appendChild(mk(tr.name, selTrip===tr.id, ()=>{ selTrip=tr.id; selDay=0; render(); }))
+  );
+  el.appendChild(mk("＋ 旅を追加", false, ()=>{
+    const w=document.getElementById("tripAddFormWrap");
+    w.style.display = w.style.display==="none" ? "" : "none";
+  }, "trip-add-btn"));
+}
+
+function addTrip(){
+  const name  = document.getElementById("tafName").value.trim();
+  const start = document.getElementById("tafStart").value;
+  const ndays = parseInt(document.getElementById("tafDays").value);
+  const err   = document.getElementById("tripFormErr");
+  if(!name)  { err.textContent="旅の名前を入れてください。"; return; }
+  if(!start) { err.textContent="出発日を選択してください。"; return; }
+  if(!ndays||ndays<1||ndays>14){ err.textContent="日数は1〜14で入力してください。"; return; }
+  err.textContent = "";
+  const days = Array.from({length:ndays}, (_,i)=>{
+    const d = new Date(start+"T12:00:00"); d.setDate(d.getDate()+i);
+    return {date:d.toISOString().slice(0,10), entries:[]};
+  });
+  const trip = {id:idGen("tr_"), name, start, days};
+  trips.push(trip); saveTrips();
+  selTrip = trip.id; selDay = 0;
+  document.getElementById("tripAddFormWrap").style.display = "none";
+  ["tafName","tafStart"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("tafDays").value = "3";
+  render();
+}
+
+/* ---------- v5: trip view ---------- */
+const MODES = {train:"🚃",bus:"🚌",car:"🚗",walk:"🚶",ship:"🚢",plane:"✈️"};
+
+function renderTripView(){
+  const trip = trips.find(t=>t.id===selTrip);
+  if(!trip){ selTrip=null; render(); return; }
+
+  // day tabs
+  const tabsEl = document.getElementById("dayTabs"); tabsEl.innerHTML="";
+  trip.days.forEach((day,i)=>{
+    const b = document.createElement("button");
+    b.className = "daytab"+(i===selDay?" active":"");
+    const d = new Date(day.date+"T12:00:00");
+    b.innerHTML = `Day${i+1}<br><small>${fmtDate(d)}</small>`;
+    b.onclick = ()=>{ selDay=i; renderTripView(); };
+    tabsEl.appendChild(b);
+  });
+
+  // entry list
+  const listEl = document.getElementById("entryList"); listEl.innerHTML="";
+  const day = trip.days[selDay];
+  if(!day.entries.length){
+    listEl.innerHTML=`<div class="trip-empty">この日のエントリがまだありません。<br><small>次のステップで追加機能を実装します。</small></div>`;
+    return;
+  }
+  const ul = document.createElement("div"); ul.className="elist";
+  day.entries.forEach((entry,ei)=>{
+    const row = document.createElement("div"); row.className="entry";
+    if(entry.type==="stay"){
+      const sp = spots.find(s=>s.id===entry.spotId);
+      const nm = sp ? esc(sp.name) : `<span style="color:var(--faint)">[削除済みスポット]</span>`;
+      const timeStr = [entry.arrive,entry.depart].filter(Boolean).join(" – ");
+      row.innerHTML=`
+        <div class="entry-time">${esc(timeStr)}</div>
+        <div class="entry-body">
+          <div class="entry-stay" id="stay-${ei}">
+            <div class="nm">${nm}</div>
+            ${entry.memo?`<div class="mo">${esc(entry.memo)}</div>`:""}
+            <div class="astro-wrap" id="astro-${ei}" style="display:none"></div>
+          </div>
+        </div>`;
+      ul.appendChild(row);
+      row.querySelector(".entry-stay").onclick = ()=>toggleAstroCard(sp, day.date, ei);
+    } else if(entry.type==="transit"){
+      const icon = MODES[entry.mode]||"→";
+      const dur = calcDur(entry.dep, entry.arr);
+      row.innerHTML=`
+        <div class="entry-time">${esc(entry.dep||"")}</div>
+        <div class="entry-body">
+          <div class="entry-transit">
+            <div class="tline"><span class="mode-icon">${icon}</span>${esc(entry.line||"")}${dur?` <small style="color:var(--faint)">${dur}</small>`:""}</div>
+            <div class="tleg">${esc(entry.from||"")} → ${esc(entry.to||"")}</div>
+          </div>
+        </div>`;
+      ul.appendChild(row);
+    } else if(entry.type==="note"){
+      row.innerHTML=`
+        <div class="entry-time"></div>
+        <div class="entry-body"><div class="entry-note"><div class="txt">${esc(entry.text||"")}</div></div></div>`;
+      ul.appendChild(row);
+    }
+  });
+  listEl.appendChild(ul);
+}
+
+function toggleAstroCard(sp, dateStr, ei){
+  const wrap = document.getElementById(`astro-${ei}`); if(!wrap) return;
+  if(wrap.style.display!=="none"){ wrap.style.display="none"; return; }
+  wrap.style.display="";
+  if(wrap.dataset.built) return;   // すでに描画済み
+  wrap.dataset.built = "1";
+  if(!sp){ wrap.innerHTML=`<div style="color:var(--faint);font-size:12px">スポットが削除されています</div>`; return; }
+  const baseNoon = new Date(dateStr+"T12:00:00");
+  const s = sampleNight(sp,baseNoon,2);
+  const sc = nightScore(s,2);
+  const wx = nightWx(sp,baseNoon);
+  const eff = wx ? Math.round(sc*(1-wx.cloud/100)) : sc;
+  const [vTxt,vCls] = verdictOf(eff);
+  const bw = bestWindow(s);
+  const mrise=crossings(s.moon,0,1)[0], mset=crossings(s.moon,0,-1)[0];
+  const gcSeg=segs(i=>s.sun[i]<-18&&s.gcA[i]>15,s);
+  let gcTxt="この夜は圏外", mwAz=null;
+  if(gcSeg.length){
+    const g=gcSeg.reduce((a,b)=>b.b-b.a>a.b-a.a?b:a);
+    let mi=g.a; for(let i=g.a;i<=g.b;i++) if(s.gcA[i]>s.gcA[mi]) mi=i;
+    gcTxt=`${fmtI(s,g.a)}–${fmtI(s,g.b)}`; mwAz=s.gcZ[mi];
+  }
+  const sunset=crossings(s.sun,-0.833,-1)[0], sunrise=crossings(s.sun,-0.833,1)[0];
+  const ssAz=sunset!=null?sunAz(s.t[sunset],sp.lat,sp.lng):null;
+  const srAz=sunrise!=null?sunAz(s.t[sunrise],sp.lat,sp.lng):null;
+  const tc=tideCache.get(wxKey(sp));
+  const coastal=tc&&tc!=="error"&&tc!=="land";
+  const tp=coastal?tideWindow(sp,baseNoon):null;
+  const tex=tp?tideExtremes(tp):[];
+  const lows=tex.filter(e=>e.type==="L"), highs=tex.filter(e=>e.type==="H");
+  wrap.innerHTML=`
+    <canvas class="tl" width="720" height="56"></canvas>
+    <div class="ticks"><span>12</span><span>15</span><span>18</span><span>21</span><span>0</span><span>3</span><span>6</span><span>9</span><span>12</span></div>
+    <div class="body2" style="margin-top:10px">
+      <div class="grid">
+        <div class="cell"><div class="k">日の入 / 日の出</div><div class="v">${fmtI(s,sunset)} / ${fmtI(s,sunrise)}</div></div>
+        <div class="cell"><div class="k">月の出 / 月の入</div><div class="v">${fmtI(s,mrise)} / ${fmtI(s,mset)} <small>輝面 ${Math.round(s.frac*100)}%</small></div></div>
+        <div class="cell"><div class="k">天の川が狙える帯</div><div class="v">${gcTxt}</div></div>
+        <div class="cell"><div class="k">ベスト帯(月・闇込み)</div><div class="v">${bw?fmtI(s,bw.a)+"–"+fmtI(s,bw.b):"—"}</div></div>
+        ${coastal?`<div class="cell"><div class="k">干潮 / 満潮</div><div class="v">${tp?(lows.map(e=>hm(new Date(e.t))).join("・")||"—"):"範囲外"} <small>/ ${tp?(highs.map(e=>hm(new Date(e.t))).join("・")||"—"):"7日先まで"}</small></div></div>`:""}
+      </div>
+      <div class="compass">${compassSVG(mwAz,ssAz,srAz)}<div class="cap">● 天の川 ・<span style="color:#B0653F">●</span> 日没 ・<span style="color:#5A6E8C">●</span> 日出</div></div>
+    </div>
+    <div class="scorebox">
+      <div class="scoreN sc ${vCls}">${eff}</div>
+      <div><div class="verdict">${vTxt}</div><div class="scoreT">星空適性${wx?"(雲を加味)":""} / 100</div></div>
+      ${wx?`<div class="wx"><div class="v">☁${wx.cloud}% <small style="color:var(--dim)">雨${wx.precip}%</small></div><div class="k">夜間平均の雲量 / 天文のみ ${sc}</div></div>`:""}
+    </div>
+    ${coastal&&tp?`<div class="tidecap">潮位カーブ(モデル予測) ▼干潮 ▲満潮</div><canvas class="tide" width="720" height="46"></canvas>`:""}`;
+  drawTimeline(wrap.querySelector("canvas.tl"),s);
+  if(tp) drawTide(wrap.querySelector("canvas.tide"),tp,tex,baseNoon);
+}
+
 function drawTide(cv, pts, extremes, baseNoon){
   if(!cv) return;
   const ctx=cv.getContext("2d"); const W=cv.width, H=cv.height;
@@ -895,7 +1131,12 @@ function addSpot(){
   Promise.allSettled([fetchWeather(sp), fetchTide(sp)]).then(render);
 }
 function delSpot(i){
-  if(!confirm(`「${spots[i].name}」を削除しますか?`)) return;
+  const sp = spots[i];
+  const inUse = trips.some(tr=>tr.days.some(d=>d.entries.some(e=>e.type==="stay"&&e.spotId===sp.id)));
+  const msg = inUse
+    ? `「${sp.name}」は旅程で使用中です。それでも削除しますか?`
+    : `「${sp.name}」を削除しますか?`;
+  if(!confirm(msg)) return;
   spots.splice(i,1); saveSpots(); render();
 }
 
