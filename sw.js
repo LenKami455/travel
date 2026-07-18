@@ -1,5 +1,5 @@
 /* ロケハンダッシュボード service worker */
-const CACHE = "rokehan-v4.0.0";
+const CACHE = "rokehan-v5.0.0";
 const ASSETS = [
   "./", "./index.html", "./manifest.webmanifest",
   "./icons/icon-192.png", "./icons/icon-512.png",
