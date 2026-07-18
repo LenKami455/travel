@@ -1077,6 +1077,21 @@ function appendEntryForm(container, day){
     </div>
     <div id="efStay" style="${type!=='stay'?'display:none':''}">
       <div class="frow"><select id="efSpot" style="flex:1">${spotOpts}</select></div>
+      <div id="efNewSpotToggle" style="margin-top:4px">
+        <button type="button" onclick="toggleNewSpotForm()" style="background:none;border:none;color:var(--amber-deep);font-size:12px;cursor:pointer;text-decoration:underline;text-underline-offset:2px">＋ 新しいスポットを追加</button>
+      </div>
+      <div id="efNewSpot" style="display:none;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:4px">
+        <div class="frow">
+          <input id="efNsName" placeholder="名前" style="flex:3;min-width:120px;font-family:var(--sans)">
+          <input id="efNsLat"  placeholder="緯度 34.52"  inputmode="decimal" style="flex:1;min-width:90px">
+          <input id="efNsLng"  placeholder="経度 136.15" inputmode="decimal" style="flex:1;min-width:90px">
+        </div>
+        <div class="frow" style="margin-top:4px">
+          <button class="addbtn" style="font-size:12px;padding:6px 14px" onclick="addSpotInline()">追加して選択</button>
+          <button onclick="document.getElementById('efNewSpot').style.display='none';document.getElementById('efNewSpotToggle').style.display=''" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:12px;padding:6px 8px">キャンセル</button>
+        </div>
+        <div class="formerr" id="efNsErr" style="font-size:11px"></div>
+      </div>
       <div class="frow">
         <input id="efArrive" type="time" value="${v('stay','arrive')}" style="flex:1">
         <input id="efDepart" type="time" value="${v('stay','depart')}" style="flex:1">
@@ -1124,6 +1139,33 @@ function openEntryForm(mode, ei=null){
   renderTripView();
 }
 function closeEntryForm(){ entryFormState=null; renderTripView(); }
+
+function toggleNewSpotForm(){
+  document.getElementById("efNewSpot").style.display = "";
+  document.getElementById("efNewSpotToggle").style.display = "none";
+}
+function addSpotInline(){
+  const name = document.getElementById("efNsName")?.value.trim();
+  const lat  = parseFloat(document.getElementById("efNsLat")?.value);
+  const lng  = parseFloat(document.getElementById("efNsLng")?.value);
+  const err  = document.getElementById("efNsErr");
+  if(!name || !isFinite(lat) || !isFinite(lng) || Math.abs(lat)>90 || Math.abs(lng)>180){
+    err.textContent = "名前と有効な緯度(±90)・経度(±180)を入れてください。"; return;
+  }
+  err.textContent = "";
+  const sp = {id:idGen("sp_"), name, lat, lng};
+  spots.push(sp); saveSpots();
+  // セレクトに追加して選択
+  const sel = document.getElementById("efSpot");
+  const opt = document.createElement("option");
+  opt.value = sp.id; opt.textContent = sp.name; opt.selected = true;
+  sel.appendChild(opt);
+  // インラインフォームを閉じる
+  document.getElementById("efNewSpot").style.display = "none";
+  document.getElementById("efNewSpotToggle").style.display = "";
+  // バックグラウンドで天気・潮汐を取得
+  Promise.allSettled([fetchWeather(sp), fetchTide(sp)]);
+}
 
 function saveEntry(){
   const trip=trips.find(t=>t.id===selTrip); if(!trip) return;
