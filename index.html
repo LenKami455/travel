@@ -488,6 +488,24 @@ else window.SunCalc = SunCalc;
   .route-conn{text-align:center;padding:6px 0;font-size:11px;color:var(--faint)}
   .route-conn a{color:var(--dusk);text-decoration:none}
   .route-conn a:hover{text-decoration:underline;color:var(--amber-deep)}
+  /* v6 -- shots */
+  .shots-section{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+  .shots-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+  .shots-hd span{font-size:11px;font-weight:600;color:var(--dim);letter-spacing:.04em;text-transform:uppercase}
+  .shot-add-btn{font-size:11px;padding:2px 10px;border:1px solid var(--line2);border-radius:12px;background:#fff;cursor:pointer;font-family:var(--sans);color:var(--dim)}
+  .shot-add-btn:hover{border-color:var(--amber);color:var(--amber-deep)}
+  .shot-row{display:flex;align-items:center;gap:6px;padding:5px 0;font-size:12px;border-bottom:1px solid var(--line)}
+  .shot-row:last-of-type{border-bottom:none}
+  .shot-badge{font-size:13px;min-width:14px;text-align:center;flex-shrink:0}
+  .shot-badge.planned{color:var(--dim)}
+  .shot-badge.shot{color:var(--amber-deep)}
+  .shot-badge.skipped{color:var(--faint)}
+  .shot-title{flex:1;font-weight:500;color:var(--ink)}
+  .shot-note{color:var(--faint);font-size:11px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .shot-acts{display:flex;gap:4px;flex-shrink:0}
+  .shot-acts button{font-size:11px;padding:1px 7px;border:1px solid var(--line2);border-radius:4px;background:#fff;cursor:pointer;font-family:var(--sans);color:var(--dim)}
+  .shot-acts button:hover{border-color:var(--amber);color:var(--amber-deep)}
+  .shot-form{background:#FAFAF9;border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:8px}
   @media (max-width:560px){ .body2{flex-direction:column} .compass{align-self:center} }
 </style>
 
@@ -681,6 +699,97 @@ function delShot(spotId, shotId){
   if(!shot || !confirm(`「${shot.title||'このショット'}」を削除しますか?`)) return;
   sp.shots = sp.shots.filter(s=>s.id!==shotId);
   saveSpots();
+  refreshShotsSection(spotId);
+}
+
+/* ---------- v6: shots UI ---------- */
+function refreshShotsSection(spotId){
+  const sp = spots.find(s=>s.id===spotId); if(!sp) return;
+  document.querySelectorAll(`.shots-section[data-spot-id="${spotId}"]`).forEach(el=>{
+    renderShotsSection(el, sp);
+  });
+}
+
+function renderShotsSection(el, sp){
+  const shots = (sp.shots||[]).filter(sh=> !sh.tripId || sh.tripId===selTrip);
+  const BADGE = {planned:'◯', shot:'●', skipped:'–'};
+  let h = `<div class="shots-hd"><span>📷 ショット</span>
+    <button class="shot-add-btn" onclick="openShotAddForm('${sp.id}')">＋ 追加</button></div>`;
+  if(shots.length===0){
+    h += `<div style="color:var(--faint);font-size:12px;padding:4px 0">まだショットがありません</div>`;
+  } else {
+    shots.forEach(sh=>{
+      h += `<div class="shot-row">
+        <span class="shot-badge ${sh.status}">${BADGE[sh.status]||'◯'}</span>
+        <span class="shot-title">${esc(sh.title||'(無題)')}</span>
+        ${sh.note?`<span class="shot-note">${esc(sh.note)}</span>`:''}
+        <div class="shot-acts">
+          <button onclick="openShotEditForm('${sp.id}','${sh.id}')">編集</button>
+          <button onclick="delShot('${sp.id}','${sh.id}')">削除</button>
+        </div>
+      </div>`;
+    });
+  }
+  h += `<div id="sf-${sp.id}" style="display:none"></div>`;
+  el.innerHTML = h;
+}
+
+function openShotAddForm(spotId){
+  const formEl = document.getElementById(`sf-${spotId}`); if(!formEl) return;
+  formEl.style.display = "";
+  formEl.innerHTML = `<div class="shot-form">
+    <div class="frow"><input id="sf-ti-${spotId}" placeholder="タイトル(例: 干潟に映る星景・縦構図)" style="flex:1;font-family:var(--sans)"></div>
+    <div class="frow"><input id="sf-no-${spotId}" placeholder="メモ・構図・設定(任意)" style="flex:1;font-family:var(--sans)"></div>
+    <div class="frow"><input id="sf-ge-${spotId}" placeholder="機材(任意)" style="flex:1;font-family:var(--sans)"></div>
+    <div class="frow" style="margin-top:6px">
+      <button class="addbtn" style="font-size:12px;padding:5px 14px" onclick="saveShotAddForm('${spotId}')">追加</button>
+      <button onclick="closeShotForm('${spotId}')" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:12px;padding:5px 8px">キャンセル</button>
+    </div>
+    <div class="formerr" id="sf-err-${spotId}" style="font-size:11px"></div>
+  </div>`;
+  document.getElementById(`sf-ti-${spotId}`)?.focus();
+}
+
+function saveShotAddForm(spotId){
+  const title = document.getElementById(`sf-ti-${spotId}`)?.value.trim();
+  if(!title){ document.getElementById(`sf-err-${spotId}`).textContent="タイトルを入力してください。"; return; }
+  const note = document.getElementById(`sf-no-${spotId}`)?.value.trim();
+  const gear = document.getElementById(`sf-ge-${spotId}`)?.value.trim();
+  addShot(spotId, {title, note, gear, tripId: selTrip||null});
+  refreshShotsSection(spotId);
+}
+
+function openShotEditForm(spotId, shotId){
+  const sp = spots.find(s=>s.id===spotId); if(!sp) return;
+  const shot = sp.shots.find(s=>s.id===shotId); if(!shot) return;
+  const formEl = document.getElementById(`sf-${spotId}`); if(!formEl) return;
+  formEl.style.display = "";
+  formEl.innerHTML = `<div class="shot-form">
+    <div style="font-size:11px;color:var(--faint);margin-bottom:6px">ショットを編集</div>
+    <div class="frow"><input id="sf-ti-${spotId}" value="${esc(shot.title||'')}" placeholder="タイトル" style="flex:1;font-family:var(--sans)"></div>
+    <div class="frow"><input id="sf-no-${spotId}" value="${esc(shot.note||'')}" placeholder="メモ・構図・設定(任意)" style="flex:1;font-family:var(--sans)"></div>
+    <div class="frow"><input id="sf-ge-${spotId}" value="${esc(shot.gear||'')}" placeholder="機材(任意)" style="flex:1;font-family:var(--sans)"></div>
+    <div class="frow" style="margin-top:6px">
+      <button class="addbtn" style="font-size:12px;padding:5px 14px" onclick="saveShotEditForm('${spotId}','${shotId}')">保存</button>
+      <button onclick="closeShotForm('${spotId}')" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:12px;padding:5px 8px">キャンセル</button>
+    </div>
+    <div class="formerr" id="sf-err-${spotId}" style="font-size:11px"></div>
+  </div>`;
+  document.getElementById(`sf-ti-${spotId}`)?.focus();
+}
+
+function saveShotEditForm(spotId, shotId){
+  const title = document.getElementById(`sf-ti-${spotId}`)?.value.trim();
+  if(!title){ document.getElementById(`sf-err-${spotId}`).textContent="タイトルを入力してください。"; return; }
+  const note = document.getElementById(`sf-no-${spotId}`)?.value.trim();
+  const gear = document.getElementById(`sf-ge-${spotId}`)?.value.trim();
+  editShot(spotId, shotId, {title, note, gear});
+  refreshShotsSection(spotId);
+}
+
+function closeShotForm(spotId){
+  const el = document.getElementById(`sf-${spotId}`);
+  if(el){ el.style.display="none"; el.innerHTML=""; }
 }
 
 async function loadTrips(){
@@ -1333,7 +1442,7 @@ function delEntry(ei){
   saveTrips(); entryFormState=null; renderTripView();
 }
 
-function buildAstroCard(wrap, sp, dateStr){
+function buildAstroCard(wrap, sp, dateStr, showShots=true){
   if(!sp){ wrap.innerHTML=`<div style="color:var(--faint);font-size:12px">スポットが削除されています</div>`; return; }
   const baseNoon = new Date(dateStr+"T12:00:00");
   const s = sampleNight(sp,baseNoon,2);
@@ -1379,6 +1488,13 @@ function buildAstroCard(wrap, sp, dateStr){
     ${coastal&&tp?`<div class="tidecap">潮位カーブ(モデル予測) ▼干潮 ▲満潮</div><canvas class="tide" width="720" height="46"></canvas>`:""}`;
   drawTimeline(wrap.querySelector("canvas.tl"),s);
   if(tp) drawTide(wrap.querySelector("canvas.tide"),tp,tex,baseNoon);
+  if(showShots){
+    const shotsEl = document.createElement('div');
+    shotsEl.className = 'shots-section';
+    shotsEl.dataset.spotId = sp.id;
+    wrap.appendChild(shotsEl);
+    renderShotsSection(shotsEl, sp);
+  }
 }
 function toggleAstroCard(sp, dateStr, ei){
   const wrap = document.getElementById(`astro-${ei}`); if(!wrap) return;
@@ -1394,7 +1510,7 @@ function toggleSharedAstroCard(sp, dateStr, ei){
   wrap.style.display="";
   if(wrap.dataset.built) return;
   wrap.dataset.built = "1";
-  buildAstroCard(wrap, sp, dateStr);
+  buildAstroCard(wrap, sp, dateStr, false); // 共有ビューにはショットを表示しない
 }
 
 function drawTide(cv, pts, extremes, baseNoon){
