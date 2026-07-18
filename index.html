@@ -472,6 +472,8 @@ else window.SunCalc = SunCalc;
 const GC_RA = 266.417*Math.PI/180, GC_DEC = -29.008*Math.PI/180;
 const DIRS = ["北","北北東","北東","東北東","東","東南東","南東","南南東","南","南南西","南西","西南西","西","西北西","北西","北北西"];
 const WD = ["日","月","火","水","木","金","土"];
+const ALPHANUM = "abcdefghijklmnopqrstuvwxyz0123456789";
+function idGen(prefix){ let s=prefix; for(let i=0;i<6;i++) s+=ALPHANUM[Math.floor(Math.random()*36)]; return s; }
 const DEFAULT_SPOTS = [
   {name:"弁天島(那智勝浦)", lat:33.617, lng:135.957, memo:"干潟×星。7/26 深夜の本命"},
   {name:"四国カルスト",       lat:33.487, lng:132.940, memo:"8月ロードトリップ Day2"},
@@ -479,6 +481,7 @@ const DEFAULT_SPOTS = [
   {name:"淀川河川敷(十三)",   lat:34.715, lng:135.480, memo:"花火・夜景の定点"}
 ];
 let spots = [];
+let trips = [];
 let selDate = new Date(); selDate.setHours(12,0,0,0);
 const wxCache = new Map();   // "lat,lng" -> {time:[], cloud:[], precip:[]} | "error"
 
@@ -501,10 +504,23 @@ async function loadSpots(){
   try{
     spots = JSON.parse(await store.get("spots-v1"));
     if(!Array.isArray(spots) || !spots.length) throw 0;
-  }catch(e){ spots = DEFAULT_SPOTS.slice(); saveSpots(); }
+  }catch(e){ spots = DEFAULT_SPOTS.slice(); }
+  // migration: idのないスポットに sp_ + 6桁英数字を付与(冪等)
+  let migrated = false;
+  spots.forEach(sp => { if(!sp.id){ sp.id = idGen("sp_"); migrated = true; } });
+  if(migrated) await saveSpots();
 }
 async function saveSpots(){
   try{ await store.set("spots-v1", JSON.stringify(spots)); }catch(e){}
+}
+async function loadTrips(){
+  try{
+    trips = JSON.parse(await store.get("trips-v1"));
+    if(!Array.isArray(trips)) throw 0;
+  }catch(e){ trips = []; }
+}
+async function saveTrips(){
+  try{ await store.set("trips-v1", JSON.stringify(trips)); }catch(e){}
 }
 
 /* ---------- weather (Open-Meteo) ---------- */
@@ -872,7 +888,7 @@ function addSpot(){
     err.textContent="名前と、有効な緯度(±90)・経度(±180)を入れてください。"; return;
   }
   err.textContent="";
-  const sp={name, lat, lng, memo:q("memo").value.trim()};
+  const sp={id:idGen("sp_"), name, lat, lng, memo:q("memo").value.trim()};
   spots.push(sp);
   ["name","lat","lng","memo"].forEach(f=>q(f).value="");
   saveSpots(); render();
@@ -895,6 +911,7 @@ window.addEventListener("load", async ()=>{
     return;
   }
   await loadSpots();
+  await loadTrips();
   render();  // まず天文データで即描画
   await Promise.allSettled([...spots.map(fetchWeather), ...spots.map(fetchTide)]);
   const anyWx = [...wxCache.values()].some(v=>v!=="error");
