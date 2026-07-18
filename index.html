@@ -459,6 +459,22 @@ else window.SunCalc = SunCalc;
   .entry-note{padding:6px 0 6px 12px;border-left:2px dashed var(--line2)}
   .entry-note .txt{color:var(--dim);font-size:13px}
   .trip-empty{color:var(--faint);font-size:13px;text-align:center;padding:40px 0;line-height:2}
+  /* v5 step3 ---- entry actions */
+  .entry-actions{display:flex;gap:4px;margin-top:5px}
+  .ea-btn{background:none;border:1px solid var(--line2);color:var(--dim);
+    font-size:11px;padding:2px 8px;border-radius:6px;cursor:pointer;transition:border-color .15s,color .15s}
+  .ea-btn:hover:not([disabled]){border-color:var(--amber);color:var(--amber-deep)}
+  .ea-btn[disabled]{opacity:.35;cursor:default;pointer-events:none}
+  .ea-del:hover:not([disabled]){border-color:var(--bad)!important;color:var(--bad)!important}
+  /* v5 step3 ---- entry form */
+  .eform{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-top:12px}
+  .eform-ttl{font-size:11px;letter-spacing:.14em;color:var(--dim);margin-bottom:10px}
+  .eform select{background:var(--card);border:1px solid var(--line2);color:var(--ink);
+    border-radius:8px;padding:8px 10px;font-size:13px;font-family:var(--sans)}
+  .elist-add{margin-top:12px}
+  .elist-add button{background:none;border:1px dashed var(--line2);color:var(--faint);
+    font-size:13px;padding:10px;border-radius:10px;cursor:pointer;width:100%;transition:border-color .15s,color .15s}
+  .elist-add button:hover{border-color:var(--amber);color:var(--amber-deep)}
   @media (max-width:560px){ .body2{flex-direction:column} .compass{align-self:center} }
 </style>
 
@@ -542,8 +558,9 @@ const DEFAULT_SPOTS = [
 ];
 let spots = [];
 let trips = [];
-let selTrip = null;  // null = すべてのスポット, string = trip.id
-let selDay  = 0;     // 旅程ビューの選択日インデックス
+let selTrip = null;       // null = すべてのスポット, string = trip.id
+let selDay  = 0;          // 旅程ビューの選択日インデックス
+let entryFormState = null; // null | {mode:'add'} | {mode:'edit', ei:number}
 let selDate = new Date(); selDate.setHours(12,0,0,0);
 const wxCache = new Map();   // "lat,lng" -> {time:[], cloud:[], precip:[]} | "error"
 
@@ -959,55 +976,201 @@ function renderTripView(){
     b.className = "daytab"+(i===selDay?" active":"");
     const d = new Date(day.date+"T12:00:00");
     b.innerHTML = `Day${i+1}<br><small>${fmtDate(d)}</small>`;
-    b.onclick = ()=>{ selDay=i; renderTripView(); };
+    b.onclick = ()=>{ selDay=i; entryFormState=null; renderTripView(); };
     tabsEl.appendChild(b);
   });
 
   // entry list
   const listEl = document.getElementById("entryList"); listEl.innerHTML="";
   const day = trip.days[selDay];
-  if(!day.entries.length){
-    listEl.innerHTML=`<div class="trip-empty">この日のエントリがまだありません。<br><small>次のステップで追加機能を実装します。</small></div>`;
-    return;
+  const n = day.entries.length;
+
+  const mkActions = (ei) => `<div class="entry-actions">
+    <button class="ea-btn" ${ei===0?"disabled":""} onclick="moveEntry(${ei},-1)">↑</button>
+    <button class="ea-btn" ${ei===n-1?"disabled":""} onclick="moveEntry(${ei},1)">↓</button>
+    <button class="ea-btn" onclick="openEntryForm('edit',${ei})">編集</button>
+    <button class="ea-btn ea-del" onclick="delEntry(${ei})">削除</button>
+  </div>`;
+
+  if(n > 0){
+    const ul = document.createElement("div"); ul.className="elist";
+    day.entries.forEach((entry,ei)=>{
+      const row = document.createElement("div"); row.className="entry";
+      if(entry.type==="stay"){
+        const sp = spots.find(s=>s.id===entry.spotId);
+        const nm = sp ? esc(sp.name) : `<span style="color:var(--faint)">[削除済みスポット]</span>`;
+        const timeStr = [entry.arrive,entry.depart].filter(Boolean).join(" – ");
+        row.innerHTML=`
+          <div class="entry-time">${esc(timeStr)}</div>
+          <div class="entry-body">
+            <div class="entry-stay">
+              <div class="nm">${nm}</div>
+              ${entry.memo?`<div class="mo">${esc(entry.memo)}</div>`:""}
+              <div class="astro-wrap" id="astro-${ei}" style="display:none"></div>
+            </div>
+            ${mkActions(ei)}
+          </div>`;
+        ul.appendChild(row);
+        row.querySelector(".entry-stay").onclick = ()=>toggleAstroCard(sp, day.date, ei);
+      } else if(entry.type==="transit"){
+        const icon = MODES[entry.mode]||"→";
+        const dur = calcDur(entry.dep, entry.arr);
+        row.innerHTML=`
+          <div class="entry-time">${esc(entry.dep||"")}</div>
+          <div class="entry-body">
+            <div class="entry-transit">
+              <div class="tline"><span class="mode-icon">${icon}</span>${esc(entry.line||"")}${dur?` <small style="color:var(--faint)">${dur}</small>`:""}</div>
+              <div class="tleg">${esc(entry.from||"")} → ${esc(entry.to||"")}</div>
+            </div>
+            ${mkActions(ei)}
+          </div>`;
+        ul.appendChild(row);
+      } else if(entry.type==="note"){
+        row.innerHTML=`
+          <div class="entry-time"></div>
+          <div class="entry-body">
+            <div class="entry-note"><div class="txt">${esc(entry.text||"")}</div></div>
+            ${mkActions(ei)}
+          </div>`;
+        ul.appendChild(row);
+      }
+    });
+    listEl.appendChild(ul);
+  } else if(!entryFormState){
+    const empty = document.createElement("div"); empty.className="trip-empty";
+    empty.textContent = "この日のエントリがまだありません。";
+    listEl.appendChild(empty);
   }
-  const ul = document.createElement("div"); ul.className="elist";
-  day.entries.forEach((entry,ei)=>{
-    const row = document.createElement("div"); row.className="entry";
-    if(entry.type==="stay"){
-      const sp = spots.find(s=>s.id===entry.spotId);
-      const nm = sp ? esc(sp.name) : `<span style="color:var(--faint)">[削除済みスポット]</span>`;
-      const timeStr = [entry.arrive,entry.depart].filter(Boolean).join(" – ");
-      row.innerHTML=`
-        <div class="entry-time">${esc(timeStr)}</div>
-        <div class="entry-body">
-          <div class="entry-stay" id="stay-${ei}">
-            <div class="nm">${nm}</div>
-            ${entry.memo?`<div class="mo">${esc(entry.memo)}</div>`:""}
-            <div class="astro-wrap" id="astro-${ei}" style="display:none"></div>
-          </div>
-        </div>`;
-      ul.appendChild(row);
-      row.querySelector(".entry-stay").onclick = ()=>toggleAstroCard(sp, day.date, ei);
-    } else if(entry.type==="transit"){
-      const icon = MODES[entry.mode]||"→";
-      const dur = calcDur(entry.dep, entry.arr);
-      row.innerHTML=`
-        <div class="entry-time">${esc(entry.dep||"")}</div>
-        <div class="entry-body">
-          <div class="entry-transit">
-            <div class="tline"><span class="mode-icon">${icon}</span>${esc(entry.line||"")}${dur?` <small style="color:var(--faint)">${dur}</small>`:""}</div>
-            <div class="tleg">${esc(entry.from||"")} → ${esc(entry.to||"")}</div>
-          </div>
-        </div>`;
-      ul.appendChild(row);
-    } else if(entry.type==="note"){
-      row.innerHTML=`
-        <div class="entry-time"></div>
-        <div class="entry-body"><div class="entry-note"><div class="txt">${esc(entry.text||"")}</div></div></div>`;
-      ul.appendChild(row);
-    }
-  });
-  listEl.appendChild(ul);
+
+  // ＋エントリを追加ボタン(addモードのフォームが開いていなければ表示)
+  if(!entryFormState || entryFormState.mode==='edit'){
+    const addDiv = document.createElement("div"); addDiv.className="elist-add";
+    const addBtn = document.createElement("button");
+    addBtn.textContent = "＋ エントリを追加";
+    addBtn.onclick = ()=>openEntryForm('add');
+    addDiv.appendChild(addBtn); listEl.appendChild(addDiv);
+  }
+
+  // インラインフォーム
+  if(entryFormState) appendEntryForm(listEl, day);
+}
+
+function appendEntryForm(container, day){
+  const state = entryFormState;
+  const entry = state.mode==='edit' ? day.entries[state.ei] : null;
+  const type  = entry ? entry.type : 'stay';
+  const v = (t,k) => (entry&&entry.type===t) ? esc(entry[k]||'') : '';
+  const spotOpts = spots.map(sp=>
+    `<option value="${esc(sp.id)}"${entry&&entry.spotId===sp.id?' selected':''}>${esc(sp.name)}</option>`
+  ).join('') || '<option value="">スポットがありません</option>';
+  const modeOpts = [['train','電車'],['bus','バス'],['car','車'],['walk','徒歩'],['ship','船'],['plane','飛行機']]
+    .map(([val,lbl])=>`<option value="${val}"${entry&&entry.type==='transit'&&entry.mode===val?' selected':''}>${lbl}</option>`).join('');
+  const form = document.createElement("div"); form.className="eform";
+  form.innerHTML=`
+    <div class="eform-ttl">${state.mode==='edit'?'エントリを編集':'エントリを追加'}</div>
+    <div class="frow">
+      <select id="efType" onchange="onEfTypeChange()">
+        <option value="stay"${type==='stay'?' selected':''}>滞在(スポット)</option>
+        <option value="transit"${type==='transit'?' selected':''}>移動</option>
+        <option value="note"${type==='note'?' selected':''}>メモ</option>
+      </select>
+    </div>
+    <div id="efStay" style="${type!=='stay'?'display:none':''}">
+      <div class="frow"><select id="efSpot" style="flex:1">${spotOpts}</select></div>
+      <div class="frow">
+        <input id="efArrive" type="time" value="${v('stay','arrive')}" style="flex:1">
+        <input id="efDepart" type="time" value="${v('stay','depart')}" style="flex:1">
+        <input id="efStayMemo" value="${v('stay','memo')}" placeholder="メモ(任意)" style="flex:2;min-width:120px;font-family:var(--sans)">
+      </div>
+    </div>
+    <div id="efTransit" style="${type!=='transit'?'display:none':''}">
+      <div class="frow">
+        <select id="efMode">${modeOpts}</select>
+        <input id="efLine" value="${v('transit','line')}" placeholder="路線・便名(任意)" style="flex:2;font-family:var(--sans)">
+      </div>
+      <div class="frow">
+        <input id="efFrom" value="${v('transit','from')}" placeholder="出発地" style="flex:1;font-family:var(--sans)">
+        <input id="efTo"   value="${v('transit','to')}"   placeholder="目的地" style="flex:1;font-family:var(--sans)">
+      </div>
+      <div class="frow">
+        <input id="efDep" type="time" value="${v('transit','dep')}">
+        <input id="efArr" type="time" value="${v('transit','arr')}">
+        <input id="efTransMemo" value="${v('transit','memo')}" placeholder="メモ(任意)" style="flex:2;font-family:var(--sans)">
+      </div>
+    </div>
+    <div id="efNote" style="${type!=='note'?'display:none':''}">
+      <div class="frow">
+        <input id="efNoteText" value="${v('note','text')}" placeholder="メモを入力" style="flex:1;font-family:var(--sans)">
+      </div>
+    </div>
+    <div class="frow" style="margin-top:10px">
+      <button class="addbtn" onclick="saveEntry()">保存</button>
+      <button onclick="closeEntryForm()" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:13px;padding:8px 10px">キャンセル</button>
+    </div>
+    <div class="formerr" id="efErr"></div>`;
+  container.appendChild(form);
+  form.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function onEfTypeChange(){
+  const t = document.getElementById("efType").value;
+  document.getElementById("efStay").style.display    = t==="stay"    ? "" : "none";
+  document.getElementById("efTransit").style.display = t==="transit" ? "" : "none";
+  document.getElementById("efNote").style.display    = t==="note"    ? "" : "none";
+}
+
+function openEntryForm(mode, ei=null){
+  entryFormState = mode==='edit' ? {mode:'edit', ei} : {mode:'add'};
+  renderTripView();
+}
+function closeEntryForm(){ entryFormState=null; renderTripView(); }
+
+function saveEntry(){
+  const trip=trips.find(t=>t.id===selTrip); if(!trip) return;
+  const day=trip.days[selDay];
+  const type=document.getElementById("efType").value;
+  const err=document.getElementById("efErr");
+  let entry;
+  if(type==="stay"){
+    const spotId=document.getElementById("efSpot")?.value;
+    if(!spotId){ err.textContent="スポットを選択してください。"; return; }
+    entry={type:"stay", spotId};
+    const ar=document.getElementById("efArrive").value, de=document.getElementById("efDepart").value;
+    const mo=document.getElementById("efStayMemo").value.trim();
+    if(ar) entry.arrive=ar; if(de) entry.depart=de; if(mo) entry.memo=mo;
+  } else if(type==="transit"){
+    entry={type:"transit", mode:document.getElementById("efMode").value};
+    const fi=id=>document.getElementById(id)?.value.trim();
+    const ft=id=>document.getElementById(id)?.value;
+    if(fi("efLine"))      entry.line=fi("efLine");
+    if(fi("efFrom"))      entry.from=fi("efFrom");
+    if(fi("efTo"))        entry.to=fi("efTo");
+    if(ft("efDep"))       entry.dep=ft("efDep");
+    if(ft("efArr"))       entry.arr=ft("efArr");
+    if(fi("efTransMemo")) entry.memo=fi("efTransMemo");
+  } else {
+    const text=document.getElementById("efNoteText")?.value.trim();
+    if(!text){ err.textContent="テキストを入力してください。"; return; }
+    entry={type:"note", text};
+  }
+  if(entryFormState.mode==='edit') day.entries[entryFormState.ei]=entry;
+  else day.entries.push(entry);
+  saveTrips(); entryFormState=null; renderTripView();
+}
+
+function moveEntry(ei, dir){
+  const trip=trips.find(t=>t.id===selTrip); if(!trip) return;
+  const entries=trip.days[selDay].entries; const ni=ei+dir;
+  if(ni<0||ni>=entries.length) return;
+  [entries[ei],entries[ni]]=[entries[ni],entries[ei]];
+  saveTrips(); entryFormState=null; renderTripView();
+}
+
+function delEntry(ei){
+  if(!confirm("このエントリを削除しますか?")) return;
+  const trip=trips.find(t=>t.id===selTrip); if(!trip) return;
+  trip.days[selDay].entries.splice(ei,1);
+  saveTrips(); entryFormState=null; renderTripView();
 }
 
 function toggleAstroCard(sp, dateStr, ei){
