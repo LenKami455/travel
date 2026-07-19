@@ -623,6 +623,11 @@ else window.SunCalc = SunCalc;
   .shiori-transit-leg{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:3px}
   .shiori-place-name{font-size:14px;font-weight:500;color:var(--ink)}
   .shiori-note-txt{color:var(--dim);font-size:13px}
+  .shiori-light-grid{display:flex;gap:20px;flex-wrap:wrap}
+  .shiori-light-cell .k{font-size:10px;letter-spacing:.1em;color:var(--faint)}
+  .shiori-light-cell .v{font-family:var(--mono);font-size:13.5px;color:var(--ink);margin-top:1px}
+  .shiori-light-cell .v small{color:var(--dim);font-size:11px;font-family:var(--sans)}
+  .shiori-light-cap{margin-top:10px;font-size:11px;color:var(--faint);letter-spacing:.04em}
 </style>
 
 <div class="wrap">
@@ -1999,13 +2004,29 @@ function toggleAstroCard(sp, dateStr, ei){
   wrap.dataset.built = "1";
   buildAstroCard(wrap, sp, dateStr);
 }
+function buildShioriLightCard(wrap, sp, dateStr){
+  if(!sp){ wrap.innerHTML=`<div style="color:var(--faint);font-size:12px">スポットが削除されています</div>`; return; }
+  const baseNoon = new Date(dateStr+"T12:00:00");
+  const s = sampleNight(sp,baseNoon,2);
+  const sunset  = crossings(s.sun,-0.833,-1)[0];
+  const duskEnd = crossings(s.sun,-6,-1)[0];
+  const mrise = crossings(s.moon,0,1)[0], mset = crossings(s.moon,0,-1)[0];
+  const blueHour = (sunset!=null && duskEnd!=null) ? `${fmtI(s,sunset)}–${fmtI(s,duskEnd)}` : "—";
+  wrap.innerHTML = `
+    <div class="shiori-light-grid">
+      <div class="shiori-light-cell"><div class="k">日の入</div><div class="v">${fmtI(s,sunset)}</div></div>
+      <div class="shiori-light-cell"><div class="k">ブルーアワー</div><div class="v">${blueHour}</div></div>
+      <div class="shiori-light-cell"><div class="k">月</div><div class="v">輝面${Math.round(s.frac*100)}% <small>${fmtI(s,mrise)}出 / ${fmtI(s,mset)}入</small></div></div>
+    </div>
+    <div class="shiori-light-cap">☾ 星も考えて組んだタイミングです</div>`;
+}
 function toggleSharedAstroCard(sp, dateStr, ei){
   const wrap = document.getElementById(`sh-astro-${ei}`); if(!wrap) return;
   if(wrap.style.display!=="none"){ wrap.style.display="none"; return; }
   wrap.style.display="";
   if(wrap.dataset.built) return;
   wrap.dataset.built = "1";
-  buildAstroCard(wrap, sp, dateStr, false); // 共有ビューにはショットを表示しない
+  buildShioriLightCard(wrap, sp, dateStr); // しおりでは日没/ブルーアワー/月齢のみ(ショット・スコア・潮位は出さない)
 }
 
 function drawTide(cv, pts, extremes, baseNoon){
