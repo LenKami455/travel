@@ -466,6 +466,11 @@ else window.SunCalc = SunCalc;
   .mode-icon{display:inline-block;width:20px}
   .entry-note{padding:6px 0 6px 12px;border-left:2px dashed var(--line2)}
   .entry-note .txt{color:var(--dim);font-size:13px}
+  .entry-place{padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:#FAFAF9}
+  .entry-place .nm{font-size:13px;font-weight:500}
+  .entry-place .mo{color:var(--dim);font-size:12px;margin-top:2px}
+  .entry-place a.pl-map{display:inline-block;font-size:11px;color:var(--dusk);text-decoration:none;margin-top:4px}
+  .entry-place a.pl-map:hover{text-decoration:underline;color:var(--amber-deep)}
   .trip-empty{color:var(--faint);font-size:13px;text-align:center;padding:40px 0;line-height:2}
   /* v5 step3 ---- entry actions */
   .entry-actions{display:flex;gap:4px;margin-top:5px}
@@ -1252,6 +1257,20 @@ function renderTripView(){
             ${mkActions(ei)}
           </div>`;
         ul.appendChild(row);
+      } else if(entry.type==="place"){
+        const timeStr = [entry.arrive,entry.depart].filter(Boolean).join(" – ");
+        const mapsUrl2 = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(entry.name)}`;
+        row.innerHTML=`
+          <div class="entry-time">${esc(timeStr)}</div>
+          <div class="entry-body">
+            <div class="entry-place">
+              <div class="nm">📍 ${esc(entry.name)}</div>
+              ${entry.memo?`<div class="mo">${esc(entry.memo)}</div>`:""}
+              <a href="${mapsUrl2}" target="_blank" rel="noopener" class="pl-map">Google マップで開く</a>
+            </div>
+            ${mkActions(ei)}
+          </div>`;
+        ul.appendChild(row);
       } else if(entry.type==="note"){
         row.innerHTML=`
           <div class="entry-time"></div>
@@ -1299,6 +1318,7 @@ function appendEntryForm(container, day){
       <select id="efType" onchange="onEfTypeChange()">
         <option value="stay"${type==='stay'?' selected':''}>滞在(スポット)</option>
         <option value="transit"${type==='transit'?' selected':''}>移動</option>
+        <option value="place"${type==='place'?' selected':''}>場所(食事・宿など)</option>
         <option value="note"${type==='note'?' selected':''}>メモ</option>
       </select>
     </div>
@@ -1340,6 +1360,16 @@ function appendEntryForm(container, day){
         <input id="efTransMemo" value="${v('transit','memo')}" placeholder="メモ(任意)" style="flex:2;font-family:var(--sans)">
       </div>
     </div>
+    <div id="efPlace" style="${type!=='place'?'display:none':''}">
+      <div class="frow">
+        <input id="efPlaceName" value="${v('place','name')}" placeholder="名称(例: 磯丸水産、勝浦御苑)" style="flex:1;font-family:var(--sans)">
+      </div>
+      <div class="frow">
+        <input id="efPlaceArrive" type="time" value="${v('place','arrive')}" style="flex:1">
+        <input id="efPlaceDepart" type="time" value="${v('place','depart')}" style="flex:1">
+        <input id="efPlaceMemo" value="${v('place','memo')}" placeholder="メモ(任意)" style="flex:2;min-width:120px;font-family:var(--sans)">
+      </div>
+    </div>
     <div id="efNote" style="${type!=='note'?'display:none':''}">
       <div class="frow">
         <input id="efNoteText" value="${v('note','text')}" placeholder="メモを入力" style="flex:1;font-family:var(--sans)">
@@ -1358,6 +1388,7 @@ function onEfTypeChange(){
   const t = document.getElementById("efType").value;
   document.getElementById("efStay").style.display    = t==="stay"    ? "" : "none";
   document.getElementById("efTransit").style.display = t==="transit" ? "" : "none";
+  document.getElementById("efPlace").style.display   = t==="place"   ? "" : "none";
   document.getElementById("efNote").style.display    = t==="note"    ? "" : "none";
 }
 
@@ -1417,6 +1448,13 @@ function saveEntry(){
     if(ft("efDep"))       entry.dep=ft("efDep");
     if(ft("efArr"))       entry.arr=ft("efArr");
     if(fi("efTransMemo")) entry.memo=fi("efTransMemo");
+  } else if(type==="place"){
+    const name=document.getElementById("efPlaceName")?.value.trim();
+    if(!name){ err.textContent="名称を入力してください。"; return; }
+    entry={type:"place", name};
+    const ar=document.getElementById("efPlaceArrive").value, de=document.getElementById("efPlaceDepart").value;
+    const mo=document.getElementById("efPlaceMemo").value.trim();
+    if(ar) entry.arrive=ar; if(de) entry.depart=de; if(mo) entry.memo=mo;
   } else {
     const text=document.getElementById("efNoteText")?.value.trim();
     if(!text){ err.textContent="テキストを入力してください。"; return; }
@@ -1744,6 +1782,19 @@ function renderSharedView(){
             <div class="tline"><span class="mode-icon">${icon}</span>${esc(entry.line||"")}${dur?` <small style="color:var(--faint)">${dur}</small>`:""}</div>
             <div class="tleg">${esc(entry.from||"")} → ${esc(entry.to||"")}</div>
             ${mlink}
+          </div>
+        </div>`;
+      ul.appendChild(row);
+    } else if(entry.type==="place"){
+      const timeStr = [entry.arrive,entry.depart].filter(Boolean).join(" – ");
+      const mapsUrl2 = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(entry.name)}`;
+      row.innerHTML=`
+        <div class="entry-time">${esc(timeStr)}</div>
+        <div class="entry-body">
+          <div class="entry-place">
+            <div class="nm">📍 ${esc(entry.name)}</div>
+            ${entry.memo?`<div class="mo">${esc(entry.memo)}</div>`:""}
+            <a href="${mapsUrl2}" target="_blank" rel="noopener" class="pl-map">Google マップで開く</a>
           </div>
         </div>`;
       ul.appendChild(row);
