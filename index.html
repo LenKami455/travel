@@ -457,6 +457,10 @@ else window.SunCalc = SunCalc;
     line-height:1.5;transition:border-color .15s,background .15s,color .15s}
   .daytab:hover{border-color:var(--amber)}
   .daytab.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .trip-subtitle-input{width:100%;border:none;border-bottom:1px dashed var(--line2);background:none;
+    color:var(--dim);font-family:var(--sans);font-size:13px;padding:8px 2px;margin-top:14px}
+  .trip-subtitle-input:focus{outline:none;border-bottom-color:var(--amber);color:var(--ink)}
+  .trip-subtitle-input::placeholder{color:var(--faint)}
   /* v6 ---- field mode */
   .tripview-hd{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:18px 0 0}
   .field-toggle{font-size:12px;padding:5px 14px;border:1px solid var(--line2);border-radius:20px;
@@ -587,6 +591,7 @@ else window.SunCalc = SunCalc;
   .shiori-title{font-size:26px;font-weight:700;margin:10px 0 6px;color:var(--ink);line-height:1.35}
   .shiori-dates{font-family:var(--mono);font-size:12.5px;color:var(--dim)}
   .shiori-route{margin-top:12px;font-size:13px;color:var(--amber-deep);letter-spacing:.02em}
+  .shiori-subtitle{margin-top:14px;font-size:14px;color:var(--dim);line-height:1.7}
   .shiori-stats{display:flex;justify-content:center;gap:30px;margin:0 0 26px;padding:16px 0;
     border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
   .shiori-stats .stat{text-align:center}
@@ -610,8 +615,10 @@ else window.SunCalc = SunCalc;
   .shiori-item.note::before{background:var(--faint)}
   .shiori-time{font-family:var(--mono);font-size:11px;color:var(--faint);margin-bottom:4px}
   .shiori-stay{cursor:pointer}
-  .shiori-stay-name{font-size:16px;font-weight:600;color:var(--ink)}
-  .shiori-stay-memo{font-size:13.5px;color:var(--ink);line-height:1.75;margin-top:6px}
+  .shiori-stay-name{font-size:12.5px;font-weight:600;color:var(--dim);letter-spacing:.04em}
+  .shiori-stay-name.solo{font-size:16px;color:var(--ink);letter-spacing:normal}
+  .shiori-stay-memo{font-size:16px;color:var(--ink);line-height:1.85;margin-top:7px;
+    padding-left:12px;border-left:2px solid var(--amber)}
   .shiori-transit-line{font-size:12.5px;color:var(--dim);display:flex;align-items:center;gap:6px}
   .shiori-transit-leg{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:3px}
   .shiori-place-name{font-size:14px;font-weight:500;color:var(--ink)}
@@ -678,6 +685,9 @@ else window.SunCalc = SunCalc;
   </div><!-- /spotsView -->
 
   <div id="tripView" style="display:none">
+    <input id="tripSubtitleInput" class="trip-subtitle-input"
+      placeholder="この旅のハイライトを一言(しおりの表紙に表示・共有されます)"
+      oninput="updateTripSubtitle(this.value)">
     <div class="tripview-hd">
       <div class="daytabs" id="dayTabs" style="margin:0"></div>
       <button id="fieldToggleBtn" class="field-toggle" onclick="toggleFieldMode()">📷 撮影チェック</button>
@@ -1392,6 +1402,13 @@ function addTrip(){
   render();
 }
 
+function updateTripSubtitle(value){
+  const trip = trips.find(t=>t.id===selTrip);
+  if(!trip) return;
+  trip.subtitle = value.trim() ? value : "";
+  saveTrips();
+}
+
 /* ---------- v6: field mode ---------- */
 function toggleFieldMode(){
   fieldMode = !fieldMode;
@@ -1599,6 +1616,9 @@ const MODES = {train:"🚃",bus:"🚌",car:"🚗",walk:"🚶",ship:"🚢",plane:
 function renderTripView(){
   const trip = trips.find(t=>t.id===selTrip);
   if(!trip){ selTrip=null; render(); return; }
+
+  const subEl = document.getElementById("tripSubtitleInput");
+  if(subEl && document.activeElement!==subEl) subEl.value = trip.subtitle || "";
 
   // トグルボタンの状態を反映
   const ftBtn = document.getElementById("fieldToggleBtn");
@@ -2277,6 +2297,7 @@ function renderSharedView(){
       <h1 class="shiori-title">${esc(trip.name)}</h1>
       <div class="shiori-dates">${esc(dateRangeStr)}・${esc(nightsStr)}</div>
       ${routeNames.length>1 ? `<div class="shiori-route">${routeNames.map(esc).join(" → ")}</div>` : ""}
+      ${trip.subtitle ? `<div class="shiori-subtitle">${esc(trip.subtitle)}</div>` : ""}
     </div>
     <div class="shiori-stats">
       <div class="stat"><div class="stat-n">${trip.days.length}</div><div class="stat-k">日程</div></div>
@@ -2325,7 +2346,7 @@ function renderSharedView(){
       item.innerHTML = `
         <div class="shiori-time">${esc(timeStr)}</div>
         <div class="shiori-stay">
-          <div class="shiori-stay-name">${nm}</div>
+          <div class="shiori-stay-name${entry.memo?"":" solo"}">${nm}</div>
           ${entry.memo?`<div class="shiori-stay-memo">${esc(entry.memo)}</div>`:""}
           <div class="astro-wrap" id="sh-astro-${ei}" style="display:none"></div>
         </div>`;
