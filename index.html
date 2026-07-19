@@ -580,6 +580,40 @@ else window.SunCalc = SunCalc;
   .history-link{font-size:11px;color:var(--amber-deep);text-decoration:none}
   .history-link:hover{text-decoration:underline}
   @media (max-width:560px){ .body2{flex-direction:column} .compass{align-self:center} }
+  /* v9 ---- しおりビュー(共有受信時のみ) */
+  .shiori-cover{padding:38px 10px 28px;text-align:center;
+    background:linear-gradient(180deg,#FBF6EE,#FFFFFF);border-radius:16px;margin-bottom:20px}
+  .shiori-eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.35em;color:var(--amber-deep)}
+  .shiori-title{font-size:26px;font-weight:700;margin:10px 0 6px;color:var(--ink);line-height:1.35}
+  .shiori-dates{font-family:var(--mono);font-size:12.5px;color:var(--dim)}
+  .shiori-route{margin-top:12px;font-size:13px;color:var(--amber-deep);letter-spacing:.02em}
+  .shiori-stats{display:flex;justify-content:center;gap:30px;margin:0 0 26px;padding:16px 0;
+    border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .shiori-stats .stat{text-align:center}
+  .shiori-stats .stat-n{font-family:var(--mono);font-size:21px;font-weight:600;color:var(--ink)}
+  .shiori-stats .stat-k{font-size:10px;color:var(--faint);letter-spacing:.1em;margin-top:2px}
+  .shiori-daytabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;justify-content:center}
+  .shiori-daytab{background:#fff;border:1px solid var(--line2);color:var(--dim);
+    font-family:var(--mono);font-size:12px;padding:6px 14px;border-radius:20px;cursor:pointer}
+  .shiori-daytab.active{border-color:var(--amber);color:var(--amber-deep);background:#FBF3E7}
+  .shiori-chapter-hd{font-size:12.5px;font-weight:600;letter-spacing:.14em;color:var(--dim);
+    margin-bottom:18px;text-align:center}
+  .shiori-timeline{position:relative;padding-left:22px;max-width:560px;margin:0 auto}
+  .shiori-timeline::before{content:"";position:absolute;left:5px;top:6px;bottom:6px;
+    width:1px;background:var(--line2)}
+  .shiori-item{position:relative;margin-bottom:24px}
+  .shiori-item::before{content:"";position:absolute;left:-22px;top:5px;width:8px;height:8px;
+    border-radius:50%;background:var(--amber)}
+  .shiori-item.transit::before{width:5px;height:5px;left:-20.5px;top:7px;background:var(--line2)}
+  .shiori-item.note::before{background:var(--faint)}
+  .shiori-time{font-family:var(--mono);font-size:11px;color:var(--faint);margin-bottom:4px}
+  .shiori-stay{cursor:pointer}
+  .shiori-stay-name{font-size:16px;font-weight:600;color:var(--ink)}
+  .shiori-stay-memo{font-size:13.5px;color:var(--ink);line-height:1.75;margin-top:6px}
+  .shiori-transit-line{font-size:12.5px;color:var(--dim);display:flex;align-items:center;gap:6px}
+  .shiori-transit-leg{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:3px}
+  .shiori-place-name{font-size:14px;font-weight:500;color:var(--ink)}
+  .shiori-note-txt{color:var(--dim);font-size:13px}
 </style>
 
 <div class="wrap">
@@ -650,6 +684,8 @@ else window.SunCalc = SunCalc;
     </div>
     <div id="entryList"></div>
   </div>
+
+  <div id="shioriView" style="display:none"></div>
 
   <details class="backup">
     <summary>バックアップ / 復元</summary>
@@ -2169,6 +2205,7 @@ function renderSharedView(){
   document.getElementById("tripSel").innerHTML = "";
   document.getElementById("tripAddFormWrap").style.display = "none";
   document.getElementById("spotsView").style.display = "none";
+  document.getElementById("tripView").style.display = "none";
   const {trip, spots: shSpots} = sharedData;
 
   const banner = document.getElementById("banner");
@@ -2178,45 +2215,91 @@ function renderSharedView(){
     <button onclick="importSharedTrip()" style="margin-left:12px;padding:4px 12px;font-size:12px;border:1px solid #2C4BAD;border-radius:6px;background:#fff;color:#2C4BAD;cursor:pointer">自分のアプリに取り込む</button>
     <button onclick="exitSharedView()" style="margin-left:8px;padding:4px 12px;font-size:12px;border:1px solid #BBC8E8;border-radius:6px;background:#fff;color:#2C4BAD;cursor:pointer">閉じる</button>`;
 
-  const tripView = document.getElementById("tripView");
-  tripView.style.display = "";
-  const tabsEl = document.getElementById("dayTabs"); tabsEl.innerHTML="";
-  trip.days.forEach((day,i)=>{
+  const shioriEl = document.getElementById("shioriView");
+  shioriEl.style.display = "";
+
+  // 表紙+概要
+  const first = new Date(trip.days[0].date+"T12:00:00");
+  const last  = new Date(trip.days[trip.days.length-1].date+"T12:00:00");
+  const nights = trip.days.length-1;
+  const dateRangeStr = trip.days.length>1
+    ? `${first.getMonth()+1}/${first.getDate()}–${last.getMonth()+1}/${last.getDate()}`
+    : fmtDate(first);
+  const nightsStr = nights>0 ? `${nights}泊${trip.days.length}日` : "日帰り";
+
+  const routeNames = [];
+  const spotIdsUsed = new Set();
+  let transitCount = 0;
+  trip.days.forEach(day=>day.entries.forEach(e=>{
+    if(e.type==="stay"){
+      const sp = shSpots.find(s=>s.id===e.spotId);
+      if(sp){
+        spotIdsUsed.add(sp.id);
+        if(routeNames[routeNames.length-1]!==sp.name) routeNames.push(sp.name);
+      }
+    } else if(e.type==="transit"){ transitCount++; }
+  }));
+
+  shioriEl.innerHTML = `
+    <div class="shiori-cover">
+      <div class="shiori-eyebrow">TRIP NOTE</div>
+      <h1 class="shiori-title">${esc(trip.name)}</h1>
+      <div class="shiori-dates">${esc(dateRangeStr)}・${esc(nightsStr)}</div>
+      ${routeNames.length>1 ? `<div class="shiori-route">${routeNames.map(esc).join(" → ")}</div>` : ""}
+    </div>
+    <div class="shiori-stats">
+      <div class="stat"><div class="stat-n">${trip.days.length}</div><div class="stat-k">日程</div></div>
+      <div class="stat"><div class="stat-n">${spotIdsUsed.size}</div><div class="stat-k">スポット</div></div>
+      <div class="stat"><div class="stat-n">${transitCount}</div><div class="stat-k">移動</div></div>
+    </div>
+    <div class="shiori-daytabs" id="shioriDayTabs"></div>
+    <div class="shiori-chapter" id="shioriChapter"></div>`;
+
+  // 日タブ(章の切り替え)
+  const tabsEl = document.getElementById("shioriDayTabs");
+  trip.days.forEach((d,i)=>{
     const b = document.createElement("button");
-    b.className = "daytab"+(i===sharedSelDay?" active":"");
-    const d = new Date(day.date+"T12:00:00");
-    b.innerHTML = `Day${i+1}<br><small>${fmtDate(d)}</small>`;
+    b.className = "shiori-daytab"+(i===sharedSelDay?" active":"");
+    const dd = new Date(d.date+"T12:00:00");
+    b.textContent = `Day${i+1} ${fmtDate(dd)}`;
     b.onclick = ()=>{ sharedSelDay=i; renderSharedView(); };
     tabsEl.appendChild(b);
   });
 
-  const listEl = document.getElementById("entryList"); listEl.innerHTML="";
+  // 選択中の日を1章として描画
+  const chapterEl = document.getElementById("shioriChapter");
   const day = trip.days[sharedSelDay];
   if(!day || day.entries.length===0){
     const empty = document.createElement("div"); empty.className="trip-empty";
     empty.textContent = "この日のエントリがまだありません。";
-    listEl.appendChild(empty); return;
+    chapterEl.appendChild(empty);
+    return;
   }
+  const hd = document.createElement("div"); hd.className="shiori-chapter-hd";
+  const dHead = new Date(day.date+"T12:00:00");
+  hd.textContent = `Day${sharedSelDay+1} ・ ${fmtDate(dHead)}`;
+  chapterEl.appendChild(hd);
+
+  const tl = document.createElement("div"); tl.className="shiori-timeline";
+  chapterEl.appendChild(tl);
+
   const GMAP_MODE = {train:'transit',bus:'transit',car:'driving',walk:'walking',ship:'transit',plane:'transit'};
-  const ul = document.createElement("div"); ul.className="elist";
   day.entries.forEach((entry,ei)=>{
-    const row = document.createElement("div"); row.className="entry";
+    const item = document.createElement("div"); item.className="shiori-item";
     if(entry.type==="stay"){
       const sp = shSpots.find(s=>s.id===entry.spotId);
       const nm = sp ? esc(sp.name) : `<span style="color:var(--faint)">[不明なスポット]</span>`;
       const timeStr = [entry.arrive,entry.depart].filter(Boolean).join(" – ");
-      row.innerHTML=`
-        <div class="entry-time">${esc(timeStr)}</div>
-        <div class="entry-body">
-          <div class="entry-stay">
-            <div class="nm">${nm}</div>
-            ${entry.memo?`<div class="mo">${esc(entry.memo)}</div>`:""}
-            <div class="astro-wrap" id="sh-astro-${ei}" style="display:none"></div>
-          </div>
+      item.innerHTML = `
+        <div class="shiori-time">${esc(timeStr)}</div>
+        <div class="shiori-stay">
+          <div class="shiori-stay-name">${nm}</div>
+          ${entry.memo?`<div class="shiori-stay-memo">${esc(entry.memo)}</div>`:""}
+          <div class="astro-wrap" id="sh-astro-${ei}" style="display:none"></div>
         </div>`;
-      ul.appendChild(row);
-      if(sp) row.querySelector(".entry-stay").onclick = ()=>toggleSharedAstroCard(sp, day.date, ei);
+      if(sp) item.querySelector(".shiori-stay").onclick = ()=>toggleSharedAstroCard(sp, day.date, ei);
     } else if(entry.type==="transit"){
+      item.classList.add("transit");
       const icon = MODES[entry.mode]||"→";
       const dur = calcDur(entry.dep, entry.arr);
       const gmMode = GMAP_MODE[entry.mode]||'transit';
@@ -2226,37 +2309,25 @@ function renderSharedView(){
       const org = entry.from || (prevSp ? `${prevSp.lat},${prevSp.lng}` : null);
       const dst = entry.to   || (nextSp ? `${nextSp.lat},${nextSp.lng}` : null);
       const mlink = (org&&dst) ? `<a href="${mapsUrl(org,dst,gmMode)}" target="_blank" rel="noopener" class="maps-link">🗺 Google マップで経路を確認</a>` : '';
-      row.innerHTML=`
-        <div class="entry-time">${esc(entry.dep||"")}</div>
-        <div class="entry-body">
-          <div class="entry-transit">
-            <div class="tline"><span class="mode-icon">${icon}</span>${esc(entry.line||"")}${dur?` <small style="color:var(--faint)">${dur}</small>`:""}</div>
-            <div class="tleg">${esc(entry.from||"")} → ${esc(entry.to||"")}</div>
-            ${mlink}
-          </div>
-        </div>`;
-      ul.appendChild(row);
+      item.innerHTML = `
+        <div class="shiori-time">${esc(entry.dep||"")}</div>
+        <div class="shiori-transit-line"><span class="mode-icon">${icon}</span>${esc(entry.line||"")}${dur?` <small style="color:var(--faint)">${dur}</small>`:""}</div>
+        <div class="shiori-transit-leg">${esc(entry.from||"")} → ${esc(entry.to||"")}</div>
+        ${mlink}`;
     } else if(entry.type==="place"){
       const timeStr = [entry.arrive,entry.depart].filter(Boolean).join(" – ");
       const mapsUrl2 = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(entry.name)}`;
-      row.innerHTML=`
-        <div class="entry-time">${esc(timeStr)}</div>
-        <div class="entry-body">
-          <div class="entry-place">
-            <div class="nm">📍 ${esc(entry.name)}</div>
-            ${entry.memo?`<div class="mo">${esc(entry.memo)}</div>`:""}
-            <a href="${mapsUrl2}" target="_blank" rel="noopener" class="pl-map">Google マップで開く</a>
-          </div>
-        </div>`;
-      ul.appendChild(row);
+      item.innerHTML = `
+        <div class="shiori-time">${esc(timeStr)}</div>
+        <div class="shiori-place-name">📍 ${esc(entry.name)}</div>
+        ${entry.memo?`<div class="shiori-stay-memo">${esc(entry.memo)}</div>`:""}
+        <a href="${mapsUrl2}" target="_blank" rel="noopener" class="maps-link">Google マップで開く</a>`;
     } else if(entry.type==="note"){
-      row.innerHTML=`
-        <div class="entry-time"></div>
-        <div class="entry-body"><div class="entry-note"><div class="txt">${esc(entry.text||"")}</div></div></div>`;
-      ul.appendChild(row);
+      item.classList.add("note");
+      item.innerHTML = `<div class="shiori-note-txt">${esc(entry.text||"")}</div>`;
     }
+    tl.appendChild(item);
   });
-  listEl.appendChild(ul);
 }
 
 async function importSharedTrip(){
@@ -2279,6 +2350,7 @@ async function importSharedTrip(){
   }));
   trips.push(newTrip); await saveTrips();
   sharedData=null; sharedSelDay=0;
+  document.getElementById("shioriView").style.display="none";
   history.replaceState(null,'',location.pathname+location.search);
   selTrip=newTrip.id; selDay=0;
   const banner=document.getElementById("banner");
@@ -2290,6 +2362,7 @@ async function importSharedTrip(){
 
 function exitSharedView(){
   sharedData=null; sharedSelDay=0;
+  document.getElementById("shioriView").style.display="none";
   history.replaceState(null,'',location.pathname+location.search);
   const banner=document.getElementById("banner");
   banner.style.display="none"; banner.className="banner";
