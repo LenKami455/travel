@@ -383,6 +383,7 @@ else window.SunCalc = SunCalc;
   .del{background:none;border:none;color:var(--faint);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:6px}
   .del:hover{color:var(--bad);background:#F5F0EC}
   .coords{font-family:var(--mono);font-size:10px;color:var(--faint);margin-top:-1px}
+  .history-badge{font-size:11px;color:var(--amber-deep);font-family:var(--mono);flex-shrink:0}
 
   canvas.tl{width:100%;height:56px;display:block;border-radius:8px;margin-top:14px}
   .ticks{display:flex;justify-content:space-between;font-family:var(--mono);
@@ -552,6 +553,18 @@ else window.SunCalc = SunCalc;
   .shot-acts button{font-size:11px;padding:1px 7px;border:1px solid var(--line2);border-radius:4px;background:#fff;cursor:pointer;font-family:var(--sans);color:var(--dim)}
   .shot-acts button:hover{border-color:var(--amber);color:var(--amber-deep)}
   .shot-form{background:#FAFAF9;border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:8px}
+  .history{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+  .history summary{cursor:pointer;font-size:11px;font-weight:600;color:var(--dim);letter-spacing:.04em;text-transform:uppercase}
+  .history-empty{color:var(--faint);font-size:12px;padding:6px 0 0}
+  .history-row{padding:7px 0;font-size:12px;border-bottom:1px solid var(--line)}
+  .history-row:last-child{border-bottom:none}
+  .history-row-main{display:flex;align-items:baseline;gap:8px}
+  .history-date{font-family:var(--mono);font-size:11px;color:var(--faint);flex-shrink:0}
+  .history-title{font-weight:500;color:var(--ink)}
+  .history-row-sub{color:var(--dim);font-size:11px;margin-top:2px}
+  .history-files{font-family:var(--mono);color:var(--faint);font-size:11px;margin-top:1px}
+  .history-link{font-size:11px;color:var(--amber-deep);text-decoration:none}
+  .history-link:hover{text-decoration:underline}
   @media (max-width:560px){ .body2{flex-direction:column} .compass{align-self:center} }
 </style>
 
@@ -849,6 +862,50 @@ function closeShotForm(spotId){
   if(el){ el.style.display="none"; el.innerHTML=""; }
 }
 
+/* ---------- v7: ロケーション資産化(スポット単位の撮影履歴) ---------- */
+function shotHistoryFor(sp){
+  return (sp.shots||[])
+    .filter(sh => sh.status==='shot')
+    .map(sh => {
+      let cond = null;
+      const m = sh.date && sh.date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if(m){
+        const baseNoon = new Date(+m[1], +m[2]-1, +m[3], 12, 0, 0);
+        const s = sampleNight(sp, baseNoon, 5);
+        cond = { frac: Math.round(s.frac*100), score: nightScore(s,5) };
+      }
+      return {...sh, cond};
+    })
+    .sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+}
+
+function renderHistorySection(history){
+  if(history.length===0){
+    return `<details class="history">
+      <summary>📷 撮影履歴</summary>
+      <div class="history-empty">まだ撮影済みのショットがありません</div>
+    </details>`;
+  }
+  const rows = history.map(sh => {
+    const condTxt = sh.cond ? `月齢輝面 ${sh.cond.frac}% ・ 星空スコア ${sh.cond.score}` : '';
+    const timeTxt = sh.captured?.time ? esc(sh.captured.time) : '';
+    const sub = [condTxt, timeTxt].filter(Boolean).join(' ・ ');
+    return `<div class="history-row">
+      <div class="history-row-main">
+        <span class="history-date">${esc(sh.date||'日付未記録')}</span>
+        <span class="history-title">${esc(sh.title||'(無題)')}</span>
+      </div>
+      ${sub?`<div class="history-row-sub">${sub}</div>`:''}
+      ${sh.captured?.files?`<div class="history-files">${esc(sh.captured.files)}</div>`:''}
+      ${sh.captured?.link?`<a class="history-link" href="${esc(sh.captured.link)}" target="_blank" rel="noopener">作例を見る ↗</a>`:''}
+    </div>`;
+  }).join('');
+  return `<details class="history">
+    <summary>📷 撮影履歴 ${history.length}件</summary>
+    ${rows}
+  </details>`;
+}
+
 async function loadTrips(){
   try{
     trips = JSON.parse(await store.get("trips-v1"));
@@ -1133,11 +1190,13 @@ function renderCards(){
     const ssAz = sunset!=null ? sunAz(s.t[sunset],sp.lat,sp.lng) : null;
     const srAz = sunrise!=null? sunAz(s.t[sunrise],sp.lat,sp.lng): null;
 
+    const history = shotHistoryFor(sp);
     const card = document.createElement("div"); card.className="card";
     card.innerHTML = `
       <div class="cardhead">
         <span class="nm">${esc(sp.name)}</span>
         <span class="memo">${esc(sp.memo||"")}</span>
+        ${history.length?`<span class="history-badge">📷 ${history.length}</span>`:''}
         <button class="del" title="削除" onclick="delSpot(${si})">×</button>
       </div>
       <div class="coords">${sp.lat.toFixed(3)}, ${sp.lng.toFixed(3)}</div>
@@ -1176,7 +1235,8 @@ function renderCards(){
           <div class="v">${wx? "☁"+wx.cloud+"% <small style='color:var(--dim)'>雨"+wx.precip+"%</small>" : "—"}</div>
           <div class="k">${wx? "夜間平均の雲量 / 天文のみ "+sc : "雲量データなし"}</div>
         </div>
-      </div>`;
+      </div>
+      ${renderHistorySection(history)}`;
     el.appendChild(card);
     drawTimeline(card.querySelector("canvas.tl"), s);
     if(tp) drawTide(card.querySelector("canvas.tide"), tp, tex, selDate);
