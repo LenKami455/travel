@@ -465,6 +465,22 @@ else window.SunCalc = SunCalc;
   .field-spot{font-size:11px;color:var(--faint);margin-top:2px}
   .field-note{font-size:12px;color:var(--dim);margin-top:3px}
   .field-empty{color:var(--faint);font-size:13px;text-align:center;padding:40px 0;line-height:2}
+  /* v6 ---- review mode */
+  .review-list{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+  .review-shot{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:#fff}
+  .review-shot.shot{border-color:#A8C5A0;background:#F6FBF5}
+  .review-shot.skipped{opacity:.55}
+  .review-hd{display:flex;align-items:center;gap:8px;cursor:pointer}
+  .review-badge{font-size:13px;min-width:18px;text-align:center;flex-shrink:0}
+  .review-title{flex:1;font-size:14px;font-weight:500}
+  .review-spot{font-size:11px;color:var(--faint)}
+  .review-flag{font-size:12px;color:var(--amber-deep)}
+  .review-form{margin-top:10px;border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:6px}
+  .review-status-row{display:flex;gap:6px}
+  .review-status-btn{flex:1;padding:7px;border:1px solid var(--line2);border-radius:8px;
+    background:#fff;cursor:pointer;font-size:12px;font-family:var(--sans);color:var(--dim);transition:background .15s,border-color .15s}
+  .review-status-btn.sel-shot{background:#E8F5E5;border-color:#A8C5A0;color:#2D6A2A;font-weight:600}
+  .review-status-btn.sel-skipped{background:#F5F0F0;border-color:#C9ABAB;color:#7A3A3A;font-weight:600}
   /* v5 ---- entry list */
   .elist{display:flex;flex-direction:column;gap:6px}
   .entry{display:flex;gap:12px;align-items:flex-start}
@@ -589,6 +605,7 @@ else window.SunCalc = SunCalc;
     <div class="tripview-hd">
       <div class="daytabs" id="dayTabs" style="margin:0"></div>
       <button id="fieldToggleBtn" class="field-toggle" onclick="toggleFieldMode()">📷 撮影チェック</button>
+      <button id="reviewToggleBtn" class="field-toggle" onclick="toggleReviewMode()">📋 振り返り</button>
     </div>
     <div id="entryList"></div>
   </div>
@@ -660,6 +677,7 @@ let selTrip = null;       // null = すべてのスポット, string = trip.id
 let selDay  = 0;          // 旅程ビューの選択日インデックス
 let entryFormState = null; // null | {mode:'add'} | {mode:'edit', ei:number}
 let fieldMode = false;     // 撮影チェックモード(fieldFlagのみ、status/captured不変)
+let reviewMode = false;    // 振り返りモード(status確定・captured手入力)
 let sharedData = null;    // { trip, spots } when viewing a shared link
 let sharedSelDay = 0;
 let selDate = new Date(); selDate.setHours(12,0,0,0);
@@ -1160,9 +1178,9 @@ function renderTripSelector(){
     b.textContent = label; if(active) b.classList.add("active");
     if(extra) b.classList.add(extra); b.onclick = onclick; return b;
   };
-  el.appendChild(mk("すべてのスポット", !selTrip, ()=>{ selTrip=null; selDay=0; fieldMode=false; render(); }));
+  el.appendChild(mk("すべてのスポット", !selTrip, ()=>{ selTrip=null; selDay=0; fieldMode=false; reviewMode=false; render(); }));
   trips.forEach(tr =>
-    el.appendChild(mk(tr.name, selTrip===tr.id, ()=>{ selTrip=tr.id; selDay=0; fieldMode=false; render(); }))
+    el.appendChild(mk(tr.name, selTrip===tr.id, ()=>{ selTrip=tr.id; selDay=0; fieldMode=false; reviewMode=false; render(); }))
   );
   if(selTrip){
     el.appendChild(mk("共有リンクをコピー", false, ()=>shareTrip(), "trip-share-btn"));
@@ -1198,6 +1216,13 @@ function addTrip(){
 /* ---------- v6: field mode ---------- */
 function toggleFieldMode(){
   fieldMode = !fieldMode;
+  if(fieldMode) reviewMode = false;
+  entryFormState = null;
+  renderTripView();
+}
+function toggleReviewMode(){
+  reviewMode = !reviewMode;
+  if(reviewMode) fieldMode = false;
   entryFormState = null;
   renderTripView();
 }
@@ -1247,6 +1272,92 @@ function renderFieldList(listEl, trip, day){
   listEl.appendChild(hint);
 }
 
+function renderReviewList(listEl, trip){
+  // 旅の全 stay スポットから shots を収集
+  const allSpotIds = new Set();
+  trip.days.forEach(d=>d.entries.forEach(e=>{ if(e.type==='stay') allSpotIds.add(e.spotId); }));
+  const rows = [];
+  allSpotIds.forEach(sid=>{
+    const sp = spots.find(s=>s.id===sid); if(!sp) return;
+    (sp.shots||[]).forEach(sh=>{
+      if(!sh.tripId || sh.tripId===selTrip) rows.push({sh, sp});
+    });
+  });
+  if(rows.length===0){
+    const empty = document.createElement("div"); empty.className="field-empty";
+    empty.innerHTML = "📋 この旅のショットがありません<br><small>スポットの天文カードからショットを追加できます</small>";
+    listEl.appendChild(empty); return;
+  }
+  // ソート: fieldFlag付きplanned → planned → shot → skipped
+  const order = sh => sh.status==='planned' ? (sh.fieldFlag?0:1) : sh.status==='shot' ? 2 : 3;
+  rows.sort((a,b)=>order(a.sh)-order(b.sh));
+
+  const BADGE = {planned:'◯', shot:'●', skipped:'–'};
+  const rl = document.createElement("div"); rl.className="review-list";
+
+  rows.forEach(({sh, sp})=>{
+    const card = document.createElement("div");
+    card.className = `review-shot ${sh.status==='shot'?'shot':sh.status==='skipped'?'skipped':''}`;
+    card.dataset.shotId = sh.id; card.dataset.spotId = sp.id;
+
+    const hasCap = sh.captured && (sh.captured.files||sh.captured.time||sh.captured.link);
+    card.innerHTML = `
+      <div class="review-hd" onclick="toggleReviewCard('${sp.id}','${sh.id}')">
+        <span class="review-badge ${sh.status}">${BADGE[sh.status]||'◯'}</span>
+        <span class="review-title">${esc(sh.title||'(無題)')}</span>
+        ${sh.fieldFlag?`<span class="review-flag">🔖</span>`:''}
+        <span class="review-spot">${esc(sp.name)}</span>
+      </div>
+      <div class="review-expand" id="rv-${sh.id}" style="display:none">
+        <div class="review-form">
+          <div class="review-status-row">
+            <button class="review-status-btn${sh.status==='shot'?' sel-shot':''}" onclick="setReviewStatus('${sp.id}','${sh.id}','shot')">● 撮った</button>
+            <button class="review-status-btn${sh.status==='skipped'?' sel-skipped':''}" onclick="setReviewStatus('${sp.id}','${sh.id}','skipped')">– 見送り</button>
+            ${sh.status!=='planned'?`<button class="review-status-btn" onclick="setReviewStatus('${sp.id}','${sh.id}','planned')">◯ 未定に戻す</button>`:''}
+          </div>
+          ${sh.status==='shot'?`
+          <input id="rv-files-${sh.id}" value="${esc(sh.captured?.files||'')}" placeholder="ファイル番号(例: DSC08432-08440)" style="font-family:var(--mono);font-size:12px">
+          <div class="frow">
+            <input id="rv-time-${sh.id}" value="${esc(sh.captured?.time||'')}" placeholder="撮影時刻(例: 02:15)" style="flex:1;font-size:12px;font-family:var(--mono)">
+            <input id="rv-link-${sh.id}" value="${esc(sh.captured?.link||'')}" placeholder="作例URL(任意)" style="flex:2;font-size:12px">
+          </div>
+          <button class="addbtn" style="font-size:12px;padding:5px 14px" onclick="saveCaptured('${sp.id}','${sh.id}')">保存</button>
+          `:''}
+        </div>
+      </div>`;
+    rl.appendChild(card);
+  });
+  listEl.appendChild(rl);
+}
+
+function toggleReviewCard(spotId, shotId){
+  const el = document.getElementById(`rv-${shotId}`); if(!el) return;
+  el.style.display = el.style.display==='none' ? '' : 'none';
+}
+
+function setReviewStatus(spotId, shotId, status){
+  const sp = spots.find(s=>s.id===spotId); if(!sp) return;
+  const shot = sp.shots.find(s=>s.id===shotId); if(!shot) return;
+  shot.status = status;
+  if(status==='shot' && !shot.captured) shot.captured = {files:'', time:'', link:''};
+  if(status!=='shot') delete shot.captured;
+  saveSpots();
+  const trip = trips.find(t=>t.id===selTrip);
+  renderReviewList(document.getElementById("entryList"), trip);
+}
+
+function saveCaptured(spotId, shotId){
+  const sp = spots.find(s=>s.id===spotId); if(!sp) return;
+  const shot = sp.shots.find(s=>s.id===shotId); if(!shot) return;
+  if(!shot.captured) shot.captured = {};
+  shot.captured.files = document.getElementById(`rv-files-${shotId}`)?.value.trim()||'';
+  shot.captured.time  = document.getElementById(`rv-time-${shotId}`)?.value.trim()||'';
+  shot.captured.link  = document.getElementById(`rv-link-${shotId}`)?.value.trim()||'';
+  saveSpots();
+  // 保存フィードバック: ボタンを一時的に変更
+  const btn = event?.target; if(btn){ btn.textContent='✓ 保存済み'; setTimeout(()=>btn.textContent='保存',1200); }
+}
+
 /* ---------- v5: trip view ---------- */
 const MODES = {train:"🚃",bus:"🚌",car:"🚗",walk:"🚶",ship:"🚢",plane:"✈️"};
 
@@ -1254,9 +1365,11 @@ function renderTripView(){
   const trip = trips.find(t=>t.id===selTrip);
   if(!trip){ selTrip=null; render(); return; }
 
-  // field mode トグルボタンの状態を反映
+  // トグルボタンの状態を反映
   const ftBtn = document.getElementById("fieldToggleBtn");
   if(ftBtn) ftBtn.classList.toggle("on", fieldMode);
+  const rvBtn = document.getElementById("reviewToggleBtn");
+  if(rvBtn) rvBtn.classList.toggle("on", reviewMode);
 
   // day tabs
   const tabsEl = document.getElementById("dayTabs"); tabsEl.innerHTML="";
@@ -1272,8 +1385,9 @@ function renderTripView(){
   const listEl = document.getElementById("entryList"); listEl.innerHTML="";
   const day = trip.days[selDay];
 
-  // 撮影チェックモード
+  // モード分岐
   if(fieldMode){ renderFieldList(listEl, trip, day); return; }
+  if(reviewMode){ renderReviewList(listEl, trip); return; }
 
   const n = day.entries.length;
 
