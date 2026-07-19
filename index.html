@@ -628,6 +628,13 @@ else window.SunCalc = SunCalc;
   .shiori-light-cell .v{font-family:var(--mono);font-size:13.5px;color:var(--ink);margin-top:1px}
   .shiori-light-cell .v small{color:var(--dim);font-size:11px;font-family:var(--sans)}
   .shiori-light-cap{margin-top:10px;font-size:11px;color:var(--faint);letter-spacing:.04em}
+  .shiori-footer{margin-top:36px;padding-top:22px;border-top:1px solid var(--line);text-align:center}
+  .shiori-import-btn{background:#fff;border:1px solid var(--amber);color:var(--amber-deep);
+    font-size:13px;padding:9px 22px;border-radius:24px;cursor:pointer;font-family:var(--sans)}
+  .shiori-import-btn:hover{background:#FBF3E7}
+  .shiori-about{margin:16px auto 0;max-width:480px;font-size:11.5px;color:var(--faint);line-height:1.8}
+  .shiori-about a{color:var(--dusk);text-decoration:none;margin-left:4px}
+  .shiori-about a:hover{text-decoration:underline;color:var(--amber-deep)}
 </style>
 
 <div class="wrap">
@@ -2327,7 +2334,14 @@ function renderSharedView(){
     </div>
     <div class="shiori-routemap-wrap">${shioriRouteSVG(routeSpots)}</div>
     <div class="shiori-daytabs" id="shioriDayTabs"></div>
-    <div class="shiori-chapter" id="shioriChapter"></div>`;
+    <div class="shiori-chapter" id="shioriChapter"></div>
+    <div class="shiori-footer">
+      <button class="shiori-import-btn" onclick="importSharedTrip()">📥 この旅程をNagiに取り込む</button>
+      <div class="shiori-about">
+        <strong>Nagiとは</strong> — 日没・月・天の川・潮を1画面で見て、撮影のタイミングを考える個人用の旅支度ノートです。
+        <a href="${esc(location.pathname+location.search)}">Nagiを開く</a>
+      </div>
+    </div>`;
 
   // 日タブ(章の切り替え)
   const tabsEl = document.getElementById("shioriDayTabs");
