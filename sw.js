@@ -1,8 +1,10 @@
 /* ロケハンダッシュボード service worker */
-const CACHE = "nagi-v6.1.0";
+const CACHE = "nagi-v6.1.1";
 const ASSETS = [
   "./", "./index.html", "./manifest.webmanifest",
-  "./icons/Nagi.png"
+  "./icons/Nagi.png",
+  "./favicon.ico",
+  "./icons/favicon-16.png", "./icons/favicon-32.png", "./icons/favicon-48.png"
 ];
 
 self.addEventListener("install", e => {
