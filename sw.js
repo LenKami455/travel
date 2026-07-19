@@ -1,9 +1,8 @@
 /* ロケハンダッシュボード service worker */
-const CACHE = "rokehan-v6.0.0";
+const CACHE = "nagi-v6.1.0";
 const ASSETS = [
   "./", "./index.html", "./manifest.webmanifest",
-  "./icons/icon-192.png", "./icons/icon-512.png",
-  "./icons/icon-512-maskable.png", "./icons/apple-touch-icon.png"
+  "./icons/Nagi.png"
 ];
 
 self.addEventListener("install", e => {

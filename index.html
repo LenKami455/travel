@@ -1,13 +1,13 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ロケハンダッシュボード</title>
+<title>Nagi — 凪</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#FFFFFF">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="apple-touch-icon" href="icons/Nagi.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="ロケハン">
+<meta name="apple-mobile-web-app-title" content="Nagi">
 <script>
 /* SunCalc v1.9.0 (c) Vladimir Agafonkin, BSD-2-Clause — embedded for offline use */
 /*
@@ -550,9 +550,9 @@ else window.SunCalc = SunCalc;
 <div class="wrap">
   <div class="banner" id="banner"></div>
   <header>
-    <div class="eyebrow">FIELD PLANNER</div>
-    <h1>ロケハンダッシュボード</h1>
-    <div class="sub">星と光の時間割 — 日没・月・天の川・雲</div>
+    <div class="eyebrow">NAGI · 凪</div>
+    <h1>Nagi</h1>
+    <div class="sub">凪を待って、一枚を撮る — 旅程・光・潮のノート</div>
   </header>
 
   <div class="trip-sel" id="tripSel"></div>
@@ -1834,7 +1834,7 @@ function exportJSON(){
   const a = document.createElement('a');
   const d = new Date();
   a.href = url;
-  a.download = `rokehan-backup-${d.toISOString().slice(0,10)}.json`;
+  a.download = `nagi-backup-${d.toISOString().slice(0,10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -1868,7 +1868,7 @@ async function shareTrip(){
   const trip = trips.find(t=>t.id===selTrip); if(!trip) return;
   const refSpots = spots.filter(sp=>
     trip.days.some(d=>d.entries.some(e=>e.type==='stay'&&e.spotId===sp.id))
-  );
+  ).map(({shots, ...rest})=>rest);   // v6: ショットは共有しない(構図メモ・作例リンクを漏らさない)
   const payload = JSON.stringify({trip, spots:refSpots});
   let hash;
   try{
@@ -2011,7 +2011,7 @@ async function importSharedTrip(){
       Math.abs(sp.lat-shSp.lat)<=0.0005 && Math.abs(sp.lng-shSp.lng)<=0.0005
     );
     if(existing){ spotIdMap[shSp.id]=existing.id; }
-    else{ const ns={...shSp, id:idGen("sp_")}; spots.push(ns); spotIdMap[shSp.id]=ns.id; }
+    else{ const ns={...shSp, id:idGen("sp_"), shots:[]}; spots.push(ns); spotIdMap[shSp.id]=ns.id; }  // 取り込みスポットは自分用に空のshotsで開始
   });
   await saveSpots();
   const newTrip = JSON.parse(JSON.stringify(shTrip));

@@ -1,6 +1,6 @@
 {
-  "name": "ロケハンダッシュボード",
-  "short_name": "ロケハン",
+  "name": "Nagi",
+  "short_name": "Nagi",
   "description": "星と光の時間割 — 日没・月・天の川・雲・潮汐",
   "start_url": "./",
   "scope": "./",
@@ -8,8 +8,8 @@
   "background_color": "#FFFFFF",
   "theme_color": "#FFFFFF",
   "icons": [
-    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
-    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
-    {"src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+    {"src": "icons/Nagi.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icons/Nagi.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "icons/Nagi.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
   ]
 }
