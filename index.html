@@ -490,6 +490,20 @@ else window.SunCalc = SunCalc;
     background:#fff;cursor:pointer;font-size:12px;font-family:var(--sans);color:var(--dim);transition:background .15s,border-color .15s}
   .review-status-btn.sel-shot{background:#E8F5E5;border-color:#A8C5A0;color:#2D6A2A;font-weight:600}
   .review-status-btn.sel-skipped{background:#F5F0F0;border-color:#C9ABAB;color:#7A3A3A;font-weight:600}
+  /* v8 ---- gear planner */
+  .gear-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .gear-tag{display:flex;align-items:center;gap:6px;font-size:12px;padding:6px 12px;
+    border:1px solid var(--line2);border-radius:20px;background:#fff;cursor:pointer;color:var(--dim)}
+  .gear-tag.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .gear-list{display:flex;flex-direction:column;margin-top:12px}
+  .gear-item{display:flex;align-items:center;gap:8px;padding:8px 4px;
+    border-bottom:1px solid var(--line);font-size:13px;cursor:pointer}
+  .gear-item:last-child{border-bottom:none}
+  .gear-item.checked .gear-item-text{color:var(--faint);text-decoration:line-through}
+  .gear-item-text{flex:1}
+  .gear-item-src{font-size:10px;color:var(--faint)}
+  .gear-item-del{background:none;border:none;color:var(--faint);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:6px}
+  .gear-item-del:hover{color:var(--bad);background:#F5F0EC}
   /* v5 ---- entry list */
   .elist{display:flex;flex-direction:column;gap:6px}
   .entry{display:flex;gap:12px;align-items:flex-start}
@@ -632,6 +646,7 @@ else window.SunCalc = SunCalc;
       <div class="daytabs" id="dayTabs" style="margin:0"></div>
       <button id="fieldToggleBtn" class="field-toggle" onclick="toggleFieldMode()">📷 撮影チェック</button>
       <button id="reviewToggleBtn" class="field-toggle" onclick="toggleReviewMode()">📋 振り返り</button>
+      <button id="gearToggleBtn" class="field-toggle" onclick="toggleGearMode()">🎒 持ち物</button>
     </div>
     <div id="entryList"></div>
   </div>
@@ -691,6 +706,12 @@ async function inflate(bytes){
   const w = ds.writable.getWriter(); w.write(bytes); w.close();
   return new TextDecoder().decode(await new Response(ds.readable).arrayBuffer());
 }
+/* ---------- v8: 機材プランナー ---------- */
+const GEAR_TAGS = [
+  { id:"astro",  label:"🌌 星撮り",       items:["三脚","広角レンズ","予備バッテリー","ヘッドライト(赤色推奨)","リモートシャッター/インターバル","防寒具"] },
+  { id:"tidal",  label:"🌊 干潟",         items:["防水シューズ・長靴","タオル","替えの靴下","Osmo Action 5 Pro"] },
+  { id:"golden", label:"🌅 ゴールデンアワー", items:["NDフィルター","レンズフード","偏光フィルター"] },
+];
 const DEFAULT_SPOTS = [
   {name:"弁天島(那智勝浦)", lat:33.617, lng:135.957, memo:"干潟×星。7/26 深夜の本命"},
   {name:"四国カルスト",       lat:33.487, lng:132.940, memo:"8月ロードトリップ Day2"},
@@ -704,6 +725,7 @@ let selDay  = 0;          // 旅程ビューの選択日インデックス
 let entryFormState = null; // null | {mode:'add'} | {mode:'edit', ei:number}
 let fieldMode = false;     // 撮影チェックモード(fieldFlagのみ、status/captured不変)
 let reviewMode = false;    // 振り返りモード(status確定・captured手入力)
+let gearMode = false;      // v8: 持ち物リストモード
 let sharedData = null;    // { trip, spots } when viewing a shared link
 let sharedSelDay = 0;
 let selDate = new Date(); selDate.setHours(12,0,0,0);
@@ -911,9 +933,55 @@ async function loadTrips(){
     trips = JSON.parse(await store.get("trips-v1"));
     if(!Array.isArray(trips)) throw 0;
   }catch(e){ trips = []; }
+  // migration: tags/gearChecklistのない旅程に[]を付与(v8) — 冪等
+  let migrated = false;
+  trips.forEach(tr=>{
+    if(!tr.tags){ tr.tags = []; migrated = true; }
+    if(!tr.gearChecklist){ tr.gearChecklist = []; migrated = true; }
+  });
+  if(migrated) await saveTrips();
 }
 async function saveTrips(){
   try{ await store.set("trips-v1", JSON.stringify(trips)); }catch(e){}
+}
+
+/* ---------- v8: 機材プランナー(データ層) ---------- */
+function toggleTripTag(tripId, tagId){
+  const trip = trips.find(t=>t.id===tripId); if(!trip) return;
+  const i = trip.tags.indexOf(tagId);
+  if(i>=0) trip.tags.splice(i,1); else trip.tags.push(tagId);
+  saveTrips();
+}
+function syncGearFromTags(tripId){
+  const trip = trips.find(t=>t.id===tripId); if(!trip) return;
+  const existingTexts = new Set(trip.gearChecklist.map(g=>g.text));
+  trip.tags.forEach(tagId=>{
+    const tag = GEAR_TAGS.find(g=>g.id===tagId); if(!tag) return;
+    tag.items.forEach(text=>{
+      if(!existingTexts.has(text)){
+        trip.gearChecklist.push({id:idGen("gear_"), text, checked:false, tag:tagId});
+        existingTexts.add(text);
+      }
+    });
+  });
+  saveTrips();
+}
+function addGearItem(tripId, text){
+  const trip = trips.find(t=>t.id===tripId); if(!trip) return;
+  if(!text) return;
+  trip.gearChecklist.push({id:idGen("gear_"), text, checked:false, tag:null});
+  saveTrips();
+}
+function toggleGearItem(tripId, itemId){
+  const trip = trips.find(t=>t.id===tripId); if(!trip) return;
+  const item = trip.gearChecklist.find(g=>g.id===itemId); if(!item) return;
+  item.checked = !item.checked;
+  saveTrips();
+}
+function delGearItem(tripId, itemId){
+  const trip = trips.find(t=>t.id===tripId); if(!trip) return;
+  trip.gearChecklist = trip.gearChecklist.filter(g=>g.id!==itemId);
+  saveTrips();
 }
 
 /* ---------- weather (Open-Meteo) ---------- */
@@ -1251,9 +1319,9 @@ function renderTripSelector(){
     b.textContent = label; if(active) b.classList.add("active");
     if(extra) b.classList.add(extra); b.onclick = onclick; return b;
   };
-  el.appendChild(mk("すべてのスポット", !selTrip, ()=>{ selTrip=null; selDay=0; fieldMode=false; reviewMode=false; render(); }));
+  el.appendChild(mk("すべてのスポット", !selTrip, ()=>{ selTrip=null; selDay=0; fieldMode=false; reviewMode=false; gearMode=false; render(); }));
   trips.forEach(tr =>
-    el.appendChild(mk(tr.name, selTrip===tr.id, ()=>{ selTrip=tr.id; selDay=0; fieldMode=false; reviewMode=false; render(); }))
+    el.appendChild(mk(tr.name, selTrip===tr.id, ()=>{ selTrip=tr.id; selDay=0; fieldMode=false; reviewMode=false; gearMode=false; render(); }))
   );
   if(selTrip){
     el.appendChild(mk("共有リンクをコピー", false, ()=>shareTrip(), "trip-share-btn"));
@@ -1277,7 +1345,7 @@ function addTrip(){
     const d = new Date(start+"T12:00:00"); d.setDate(d.getDate()+i);
     return {date:d.toISOString().slice(0,10), entries:[]};
   });
-  const trip = {id:idGen("tr_"), name, start, days};
+  const trip = {id:idGen("tr_"), name, start, days, tags:[], gearChecklist:[]};
   trips.push(trip); saveTrips();
   selTrip = trip.id; selDay = 0;
   document.getElementById("tripAddFormWrap").style.display = "none";
@@ -1289,13 +1357,19 @@ function addTrip(){
 /* ---------- v6: field mode ---------- */
 function toggleFieldMode(){
   fieldMode = !fieldMode;
-  if(fieldMode) reviewMode = false;
+  if(fieldMode){ reviewMode = false; gearMode = false; }
   entryFormState = null;
   renderTripView();
 }
 function toggleReviewMode(){
   reviewMode = !reviewMode;
-  if(reviewMode) fieldMode = false;
+  if(reviewMode){ fieldMode = false; gearMode = false; }
+  entryFormState = null;
+  renderTripView();
+}
+function toggleGearMode(){
+  gearMode = !gearMode;
+  if(gearMode){ fieldMode = false; reviewMode = false; }
   entryFormState = null;
   renderTripView();
 }
@@ -1431,6 +1505,56 @@ function saveCaptured(spotId, shotId){
   const btn = event?.target; if(btn){ btn.textContent='✓ 保存済み'; setTimeout(()=>btn.textContent='保存',1200); }
 }
 
+/* ---------- v8: 機材プランナー(UI) ---------- */
+function renderGearList(listEl, trip){
+  const wrap = document.createElement("div"); wrap.className="gear-wrap";
+
+  const tagsHtml = GEAR_TAGS.map(tag => `
+    <label class="gear-tag${trip.tags.includes(tag.id)?' on':''}">
+      <input type="checkbox" ${trip.tags.includes(tag.id)?'checked':''}
+        onchange="toggleTripTag('${trip.id}','${tag.id}'); renderTripView()">
+      ${tag.label}
+    </label>`).join('');
+
+  wrap.innerHTML = `
+    <div class="gear-tags">${tagsHtml}</div>
+    <div class="frow" style="margin-top:8px">
+      <button class="addbtn" style="font-size:12px;padding:6px 14px" onclick="syncGearFromTags('${trip.id}'); renderTripView()">タグから更新</button>
+    </div>
+    <div class="gear-list" id="gear-list-${trip.id}"></div>
+    <div class="frow" style="margin-top:10px">
+      <input id="gear-new-${trip.id}" placeholder="持ち物を追加(例: 予備SDカード)" style="flex:1;font-family:var(--sans)"
+        onkeydown="if(event.key==='Enter'){ addGearItemFromInput('${trip.id}'); }">
+      <button class="addbtn" style="font-size:12px;padding:6px 14px" onclick="addGearItemFromInput('${trip.id}')">追加</button>
+    </div>`;
+  listEl.appendChild(wrap);
+  renderGearItems(trip);
+}
+
+function renderGearItems(trip){
+  const el = document.getElementById(`gear-list-${trip.id}`); if(!el) return;
+  if(trip.gearChecklist.length===0){
+    el.innerHTML = `<div class="field-empty" style="padding:24px 0">🎒 持ち物がまだありません<br><small>上のタグを選んで「タグから更新」、または下から自由に追加できます</small></div>`;
+    return;
+  }
+  const TAGLABEL = Object.fromEntries(GEAR_TAGS.map(t=>[t.id,t.label]));
+  el.innerHTML = trip.gearChecklist.map(item => `
+    <label class="gear-item${item.checked?' checked':''}">
+      <input type="checkbox" ${item.checked?'checked':''} onchange="toggleGearItem('${trip.id}','${item.id}'); renderGearItems(trips.find(t=>t.id==='${trip.id}'))">
+      <span class="gear-item-text">${esc(item.text)}</span>
+      ${item.tag?`<span class="gear-item-src">${esc(TAGLABEL[item.tag]||'')}</span>`:''}
+      <button class="gear-item-del" title="削除" onclick="delGearItem('${trip.id}','${item.id}'); renderGearItems(trips.find(t=>t.id==='${trip.id}'))">×</button>
+    </label>`).join('');
+}
+
+function addGearItemFromInput(tripId){
+  const input = document.getElementById(`gear-new-${tripId}`); if(!input) return;
+  const text = input.value.trim(); if(!text) return;
+  addGearItem(tripId, text);
+  input.value = "";
+  renderGearItems(trips.find(t=>t.id===tripId));
+}
+
 /* ---------- v5: trip view ---------- */
 const MODES = {train:"🚃",bus:"🚌",car:"🚗",walk:"🚶",ship:"🚢",plane:"✈️"};
 
@@ -1443,6 +1567,8 @@ function renderTripView(){
   if(ftBtn) ftBtn.classList.toggle("on", fieldMode);
   const rvBtn = document.getElementById("reviewToggleBtn");
   if(rvBtn) rvBtn.classList.toggle("on", reviewMode);
+  const grBtn = document.getElementById("gearToggleBtn");
+  if(grBtn) grBtn.classList.toggle("on", gearMode);
 
   // day tabs
   const tabsEl = document.getElementById("dayTabs"); tabsEl.innerHTML="";
@@ -1461,6 +1587,7 @@ function renderTripView(){
   // モード分岐
   if(fieldMode){ renderFieldList(listEl, trip, day); return; }
   if(reviewMode){ renderReviewList(listEl, trip); return; }
+  if(gearMode){ renderGearList(listEl, trip); return; }
 
   const n = day.entries.length;
 
@@ -1998,7 +2125,8 @@ async function shareTrip(){
   const refSpots = spots.filter(sp=>
     trip.days.some(d=>d.entries.some(e=>e.type==='stay'&&e.spotId===sp.id))
   ).map(({shots, ...rest})=>rest);   // v6: ショットは共有しない(構図メモ・作例リンクを漏らさない)
-  const payload = JSON.stringify({trip, spots:refSpots});
+  const { tags, gearChecklist, ...tripRest } = trip;   // v8: 持ち物リストも共有しない(個人の機材準備層)
+  const payload = JSON.stringify({trip: tripRest, spots:refSpots});
   let hash;
   try{
     const compressed = await deflate(payload);
@@ -2145,6 +2273,7 @@ async function importSharedTrip(){
   await saveSpots();
   const newTrip = JSON.parse(JSON.stringify(shTrip));
   newTrip.id = idGen("tr_");
+  newTrip.tags = []; newTrip.gearChecklist = [];   // 取り込んだ旅は自分用に空の持ち物リストで開始
   newTrip.days.forEach(day=>day.entries.forEach(e=>{
     if(e.type==='stay'&&spotIdMap[e.spotId]) e.spotId=spotIdMap[e.spotId];
   }));
