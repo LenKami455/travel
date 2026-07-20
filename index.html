@@ -592,8 +592,10 @@ else window.SunCalc = SunCalc;
   .history-link:hover{text-decoration:underline}
   @media (max-width:560px){ .body2{flex-direction:column} .compass{align-self:center} }
   /* v9 ---- しおりビュー(共有受信時のみ) */
-  .shiori-cover{padding:38px 10px 28px;text-align:center;
-    background:linear-gradient(180deg,#FBF1DE,#FBF8F2);border-radius:16px;margin-bottom:20px}
+  .shiori-cover{text-align:center;
+    background:linear-gradient(180deg,#FBF1DE,#FBF8F2);border-radius:16px;margin-bottom:20px;overflow:hidden}
+  .shiori-cover-photo{width:100%;height:220px;object-fit:cover;display:block}
+  .shiori-cover-body{padding:38px 14px 28px}
   .shiori-eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.35em;color:var(--amber-deep)}
   .shiori-title{font-family:var(--serif);font-size:27px;font-weight:600;margin:10px 0 6px;color:var(--ink);line-height:1.45}
   .shiori-dates{font-family:var(--mono);font-size:12.5px;color:var(--dim)}
@@ -1339,7 +1341,7 @@ function renderCards(){
       </div>
       <div class="coords">${sp.lat.toFixed(3)}, ${sp.lng.toFixed(3)}</div>
       <div class="spot-photo-row">
-        ${sp.photoUrl?`<img class="spot-photo-thumb" src="${esc(sp.photoUrl)}" alt="" loading="lazy">`:""}
+        ${sp.photoUrl?`<img class="spot-photo-thumb" src="${esc(sp.photoUrl)}" alt="" loading="lazy" onerror="this.remove()">`:""}
         <input class="spot-photo-input" placeholder="写真URL(任意・しおりに使用)" value="${esc(sp.photoUrl||"")}" onchange="updateSpotPhotoUrl('${sp.id}', this.value)">
       </div>
       <canvas class="tl" width="720" height="56"></canvas>
@@ -2348,11 +2350,14 @@ function renderSharedView(){
 
   shioriEl.innerHTML = `
     <div class="shiori-cover">
-      <div class="shiori-eyebrow">TRIP NOTE</div>
-      <h1 class="shiori-title">${esc(trip.name)}</h1>
-      <div class="shiori-dates">${esc(dateRangeStr)}・${esc(nightsStr)}</div>
-      ${routeNames.length>1 ? `<div class="shiori-route">${routeNames.map(esc).join(" → ")}</div>` : ""}
-      ${trip.subtitle ? `<div class="shiori-subtitle">${esc(trip.subtitle)}</div>` : ""}
+      ${trip.coverPhotoUrl ? `<img class="shiori-cover-photo" src="${esc(trip.coverPhotoUrl)}" alt="" loading="lazy" onerror="this.remove()">` : ""}
+      <div class="shiori-cover-body">
+        <div class="shiori-eyebrow">TRIP NOTE</div>
+        <h1 class="shiori-title">${esc(trip.name)}</h1>
+        <div class="shiori-dates">${esc(dateRangeStr)}・${esc(nightsStr)}</div>
+        ${routeNames.length>1 ? `<div class="shiori-route">${routeNames.map(esc).join(" → ")}</div>` : ""}
+        ${trip.subtitle ? `<div class="shiori-subtitle">${esc(trip.subtitle)}</div>` : ""}
+      </div>
     </div>
     <div class="shiori-stats">
       <div class="stat"><div class="stat-n">${trip.days.length}</div><div class="stat-k">日程</div></div>
