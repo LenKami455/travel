@@ -383,6 +383,12 @@ else window.SunCalc = SunCalc;
   .del{background:none;border:none;color:var(--faint);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:6px}
   .del:hover{color:var(--bad);background:#F5F0EC}
   .coords{font-family:var(--mono);font-size:10px;color:var(--faint);margin-top:-1px}
+  .spot-photo-row{display:flex;align-items:center;gap:8px;margin-top:6px}
+  .spot-photo-thumb{width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;border:1px solid var(--line)}
+  .spot-photo-input{flex:1;min-width:0;border:none;border-bottom:1px dashed var(--line2);background:none;
+    color:var(--dim);font-family:var(--sans);font-size:11.5px;padding:4px 2px}
+  .spot-photo-input:focus{outline:none;border-bottom-color:var(--amber);color:var(--ink)}
+  .spot-photo-input::placeholder{color:var(--faint)}
   .history-badge{font-size:11px;color:var(--amber-deep);font-family:var(--mono);flex-shrink:0}
 
   canvas.tl{width:100%;height:56px;display:block;border-radius:8px;margin-top:14px}
@@ -700,6 +706,9 @@ else window.SunCalc = SunCalc;
     <input id="tripSubtitleInput" class="trip-subtitle-input"
       placeholder="この旅のハイライトを一言(しおりの表紙に表示・共有されます)"
       oninput="updateTripSubtitle(this.value)">
+    <input id="tripCoverPhotoInput" class="trip-subtitle-input"
+      placeholder="表紙の写真URL(任意・しおりの表紙に使用・共有されます)"
+      oninput="updateTripCoverPhoto(this.value)">
     <div class="tripview-hd">
       <div class="daytabs" id="dayTabs" style="margin:0"></div>
       <button id="fieldToggleBtn" class="field-toggle" onclick="toggleFieldMode()">📷 撮影チェック</button>
@@ -1328,6 +1337,10 @@ function renderCards(){
         <button class="del" title="削除" onclick="delSpot(${si})">×</button>
       </div>
       <div class="coords">${sp.lat.toFixed(3)}, ${sp.lng.toFixed(3)}</div>
+      <div class="spot-photo-row">
+        ${sp.photoUrl?`<img class="spot-photo-thumb" src="${esc(sp.photoUrl)}" alt="" loading="lazy">`:""}
+        <input class="spot-photo-input" placeholder="写真URL(任意・しおりに使用)" value="${esc(sp.photoUrl||"")}" onchange="updateSpotPhotoUrl('${sp.id}', this.value)">
+      </div>
       <canvas class="tl" width="720" height="56"></canvas>
       <div class="ticks"><span>12</span><span>15</span><span>18</span><span>21</span><span>0</span><span>3</span><span>6</span><span>9</span><span>12</span></div>
       <div class="legend">
@@ -1418,6 +1431,12 @@ function updateTripSubtitle(value){
   const trip = trips.find(t=>t.id===selTrip);
   if(!trip) return;
   trip.subtitle = value.trim() ? value : "";
+  saveTrips();
+}
+function updateTripCoverPhoto(value){
+  const trip = trips.find(t=>t.id===selTrip);
+  if(!trip) return;
+  trip.coverPhotoUrl = value.trim() ? value.trim() : "";
   saveTrips();
 }
 
@@ -1631,6 +1650,8 @@ function renderTripView(){
 
   const subEl = document.getElementById("tripSubtitleInput");
   if(subEl && document.activeElement!==subEl) subEl.value = trip.subtitle || "";
+  const coverEl = document.getElementById("tripCoverPhotoInput");
+  if(coverEl && document.activeElement!==coverEl) coverEl.value = trip.coverPhotoUrl || "";
 
   // トグルボタンの状態を反映
   const ftBtn = document.getElementById("fieldToggleBtn");
@@ -2166,6 +2187,11 @@ function delSpot(i){
     : `「${sp.name}」を削除しますか?`;
   if(!confirm(msg)) return;
   spots.splice(i,1); saveSpots(); render();
+}
+function updateSpotPhotoUrl(spotId, value){
+  const sp = spots.find(s=>s.id===spotId); if(!sp) return;
+  sp.photoUrl = value.trim() ? value.trim() : "";
+  saveSpots(); renderCards();
 }
 
 /* ---------- v5: backup ---------- */
