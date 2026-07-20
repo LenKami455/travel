@@ -1,5 +1,5 @@
 /* ロケハンダッシュボード service worker */
-const CACHE = "nagi-v9.1.0";
+const CACHE = "nagi-v10.0.0";
 const ASSETS = [
   "./", "./index.html", "./manifest.webmanifest",
   "./icons/Nagi.png",
