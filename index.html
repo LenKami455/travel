@@ -554,6 +554,22 @@ else window.SunCalc = SunCalc;
     background:var(--surface);cursor:pointer;font-size:12px;font-family:var(--sans);color:var(--dim);transition:background .15s,border-color .15s}
   .review-status-btn.sel-shot{background:#E8F5E5;border-color:#A8C5A0;color:#2D6A2A;font-weight:600}
   .review-status-btn.sel-skipped{background:#F5F0F0;border-color:#C9ABAB;color:#7A3A3A;font-weight:600}
+  /* v10 ---- 写真日記(振り返りモードの写真添付・アルバム) */
+  .review-photo-row{display:flex;align-items:center;gap:8px;margin-top:2px}
+  .review-photo-thumb{width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0;border:1px solid var(--line)}
+  .review-photo-btn{font-size:12px;padding:6px 12px;border:1px solid var(--line2);border-radius:8px;
+    background:var(--surface);cursor:pointer;color:var(--blue-deep);font-family:var(--sans)}
+  .review-photo-btn:hover{border-color:var(--blue)}
+  .review-photo-del{font-size:11px;padding:5px 10px;border:1px solid var(--line2);border-radius:8px;
+    background:var(--surface);cursor:pointer;color:var(--bad);font-family:var(--sans)}
+  .review-photo-del:hover{border-color:var(--bad)}
+  .album-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+  .album-card{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)}
+  .album-photo{width:100%;height:140px;object-fit:cover;display:block;background:var(--card)}
+  .album-info{padding:8px 10px}
+  .album-title{font-size:12.5px;font-weight:500;color:var(--ink);overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .album-meta{font-size:10.5px;color:var(--faint);font-family:var(--mono);margin-top:2px}
   /* v8 ---- gear planner */
   .gear-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
   .gear-tag{display:flex;align-items:center;gap:6px;font-size:12px;padding:6px 12px;
@@ -797,6 +813,7 @@ else window.SunCalc = SunCalc;
       <button id="fieldToggleBtn" class="field-toggle" onclick="toggleFieldMode()">📷 撮影チェック</button>
       <button id="reviewToggleBtn" class="field-toggle" onclick="toggleReviewMode()">📋 振り返り</button>
       <button id="gearToggleBtn" class="field-toggle" onclick="toggleGearMode()">🎒 持ち物</button>
+      <button id="albumToggleBtn" class="field-toggle" onclick="toggleAlbumMode()">📔 アルバム</button>
     </div>
     <div id="entryList"></div>
   </div>
@@ -849,6 +866,115 @@ const WD = ["日","月","火","水","木","金","土"];
 const ALPHANUM = "abcdefghijklmnopqrstuvwxyz0123456789";
 function idGen(prefix){ let s=prefix; for(let i=0;i<6;i++) s+=ALPHANUM[Math.floor(Math.random()*36)]; return s; }
 
+/* ---------- v10: 写真日記(IndexedDB) ---------- */
+const PHOTO_DB_NAME = "nagi-photos", PHOTO_STORE = "photos";
+function openPhotoDB(){
+  return new Promise((resolve, reject)=>{
+    if(typeof indexedDB === "undefined"){ reject(new Error("indexedDB unavailable")); return; }
+    const req = indexedDB.open(PHOTO_DB_NAME, 1);
+    req.onupgradeneeded = ()=>{ req.result.createObjectStore(PHOTO_STORE); };
+    req.onsuccess = ()=> resolve(req.result);
+    req.onerror = ()=> reject(req.error);
+  });
+}
+async function putPhoto(id, blob){
+  const db = await openPhotoDB();
+  return new Promise((resolve, reject)=>{
+    const tx = db.transaction(PHOTO_STORE, "readwrite");
+    tx.objectStore(PHOTO_STORE).put(blob, id);
+    tx.oncomplete = ()=>resolve();
+    tx.onerror = ()=>reject(tx.error);
+  });
+}
+async function getPhoto(id){
+  const db = await openPhotoDB();
+  return new Promise((resolve, reject)=>{
+    const tx = db.transaction(PHOTO_STORE, "readonly");
+    const req = tx.objectStore(PHOTO_STORE).get(id);
+    req.onsuccess = ()=>resolve(req.result||null);
+    req.onerror = ()=>reject(req.error);
+  });
+}
+async function deletePhoto(id){
+  const db = await openPhotoDB();
+  return new Promise((resolve, reject)=>{
+    const tx = db.transaction(PHOTO_STORE, "readwrite");
+    tx.objectStore(PHOTO_STORE).delete(id);
+    tx.oncomplete = ()=>resolve();
+    tx.onerror = ()=>reject(tx.error);
+  });
+}
+function compressImageFile(file, maxEdge=1600, quality=0.85){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = ()=>{
+      let {width, height} = img;
+      if(width>maxEdge || height>maxEdge){
+        if(width>height){ height = Math.round(height*maxEdge/width); width = maxEdge; }
+        else{ width = Math.round(width*maxEdge/height); height = maxEdge; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      canvas.toBlob(blob=>{
+        URL.revokeObjectURL(url);
+        blob ? resolve(blob) : reject(new Error("toBlob failed"));
+      }, "image/jpeg", quality);
+    };
+    img.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error("image load failed")); };
+    img.src = url;
+  });
+}
+function blobToDataURL(blob){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>resolve(reader.result);
+    reader.onerror = ()=>reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+function dataURLToBlob(dataURL){
+  const [meta, b64] = dataURL.split(',');
+  const mime = meta.match(/:(.*?);/)[1];
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], {type: mime});
+}
+function loadShotPhotoInto(imgEl, photoId){
+  if(!photoId || !imgEl) return;
+  getPhoto(photoId).then(blob=>{ if(blob) imgEl.src = URL.createObjectURL(blob); }).catch(()=>{});
+}
+async function attachShotPhoto(spotId, shotId, file){
+  if(!file) return;
+  const sp = spots.find(s=>s.id===spotId); if(!sp) return;
+  const shot = sp.shots.find(s=>s.id===shotId); if(!shot) return;
+  try{
+    const blob = await compressImageFile(file);
+    const photoId = shot.photoId || idGen("photo_");
+    await putPhoto(photoId, blob);
+    shot.photoId = photoId;
+    saveSpots();
+    const trip = trips.find(t=>t.id===selTrip);
+    if(reviewMode) renderReviewList(document.getElementById("entryList"), trip);
+    if(albumMode) renderAlbumList(document.getElementById("entryList"), trip);
+  }catch(e){
+    alert("写真の読み込みに失敗しました。別の画像で試してください。");
+  }
+}
+async function removeShotPhoto(spotId, shotId){
+  const sp = spots.find(s=>s.id===spotId); if(!sp) return;
+  const shot = sp.shots.find(s=>s.id===shotId); if(!shot || !shot.photoId) return;
+  if(!confirm("写真を削除しますか?")) return;
+  try{ await deletePhoto(shot.photoId); }catch(e){}
+  delete shot.photoId;
+  saveSpots();
+  const trip = trips.find(t=>t.id===selTrip);
+  if(reviewMode) renderReviewList(document.getElementById("entryList"), trip);
+  if(albumMode) renderAlbumList(document.getElementById("entryList"), trip);
+}
+
 /* ---------- share link utilities ---------- */
 function toBase64url(bytes){
   return btoa(String.fromCharCode(...new Uint8Array(bytes)))
@@ -891,6 +1017,7 @@ let entryFormState = null; // null | {mode:'add'} | {mode:'edit', ei:number}
 let fieldMode = false;     // 撮影チェックモード(fieldFlagのみ、status/captured不変)
 let reviewMode = false;    // 振り返りモード(status確定・captured手入力)
 let gearMode = false;      // v8: 持ち物リストモード
+let albumMode = false;     // v10: 写真日記(アルバム)モード
 let sharedData = null;    // { trip, spots } when viewing a shared link
 let sharedSelDay = 0;
 let selDate = new Date(); selDate.setHours(12,0,0,0);
@@ -1360,7 +1487,7 @@ function compassSVG(mwAz, ssAz, srAz){
 /* ---------- v10: 下タブ ---------- */
 function switchTab(tab){
   activeTab = tab;
-  entryFormState = null; fieldMode = false; reviewMode = false; gearMode = false;
+  entryFormState = null; fieldMode = false; reviewMode = false; gearMode = false; albumMode = false;
   render();
 }
 function renderBottomTabs(){
@@ -1588,7 +1715,7 @@ function renderTripSelector(){
       const hd = document.createElement("div"); hd.className = "trip-detail-hd";
       const backBtn = document.createElement("button");
       backBtn.className = "tdh-back"; backBtn.textContent = "← 本棚に戻る";
-      backBtn.onclick = ()=>{ selTrip=null; selDay=0; render(); };
+      backBtn.onclick = ()=>{ selTrip=null; selDay=0; fieldMode=false; reviewMode=false; gearMode=false; albumMode=false; render(); };
       const nm = document.createElement("div"); nm.className = "tdh-name"; nm.textContent = trip.name;
       const actions = document.createElement("div"); actions.className = "tdh-actions";
       const shareBtn = document.createElement("button");
@@ -1621,7 +1748,7 @@ function renderTripSelector(){
         <span>📍 ${stats.spotCount}</span><span>📷 ${stats.shotCount}</span><span>🗓 ${stats.dayCount}日</span>
         <span class="tcov-open">開く →</span>
       </div>`;
-    card.onclick = ()=>{ selTrip=tr.id; selDay=0; fieldMode=false; reviewMode=false; gearMode=false; render(); };
+    card.onclick = ()=>{ selTrip=tr.id; selDay=0; fieldMode=false; reviewMode=false; gearMode=false; albumMode=false; render(); };
     shelf.appendChild(card);
   });
   const addCard = document.createElement("div"); addCard.className = "trip-add-card";
@@ -1660,7 +1787,7 @@ function delTrip(){
   const trip = trips.find(t=>t.id===selTrip); if(!trip) return;
   if(!confirm(`「${trip.name}」を削除しますか?(この操作は取り消せません。スポット自体や撮影履歴は残ります)`)) return;
   trips = trips.filter(t=>t.id!==trip.id);
-  selTrip = null; selDay = 0; fieldMode=false; reviewMode=false; gearMode=false;
+  selTrip = null; selDay = 0; fieldMode=false; reviewMode=false; gearMode=false; albumMode=false;
   saveTrips(); render();
 }
 
@@ -1680,24 +1807,31 @@ function updateTripCoverPhoto(value){
 /* ---------- v6: field mode ---------- */
 function toggleFieldMode(){
   fieldMode = !fieldMode;
-  if(fieldMode){ reviewMode = false; gearMode = false; }
+  if(fieldMode){ reviewMode = false; gearMode = false; albumMode = false; }
   entryFormState = null;
   renderTripView();
 }
 function toggleReviewMode(){
   reviewMode = !reviewMode;
-  if(reviewMode){ fieldMode = false; gearMode = false; }
+  if(reviewMode){ fieldMode = false; gearMode = false; albumMode = false; }
   entryFormState = null;
   renderTripView();
 }
 function toggleGearMode(){
   gearMode = !gearMode;
-  if(gearMode){ fieldMode = false; reviewMode = false; }
+  if(gearMode){ fieldMode = false; reviewMode = false; albumMode = false; }
+  entryFormState = null;
+  renderTripView();
+}
+function toggleAlbumMode(){
+  albumMode = !albumMode;
+  if(albumMode){ fieldMode = false; reviewMode = false; gearMode = false; }
   entryFormState = null;
   renderTripView();
 }
 
 function renderFieldList(listEl, trip, day){
+  listEl.innerHTML = "";
   // その日の全 stay エントリのスポットから planned ショットを収集
   const rows = [];
   day.entries.forEach(entry=>{
@@ -1743,6 +1877,7 @@ function renderFieldList(listEl, trip, day){
 }
 
 function renderReviewList(listEl, trip){
+  listEl.innerHTML = "";
   // 旅の全 stay スポットから shots を収集
   const allSpotIds = new Set();
   trip.days.forEach(d=>d.entries.forEach(e=>{ if(e.type==='stay') allSpotIds.add(e.spotId); }));
@@ -1792,12 +1927,21 @@ function renderReviewList(listEl, trip){
             <input id="rv-link-${sh.id}" value="${esc(sh.captured?.link||'')}" placeholder="作例URL(任意)" style="flex:2;font-size:12px">
           </div>
           <button class="addbtn" style="font-size:12px;padding:5px 14px" onclick="saveCaptured('${sp.id}','${sh.id}')">保存</button>
+          <div class="review-photo-row">
+            ${sh.photoId?`<img class="review-photo-thumb" id="rvphoto-${sh.id}" alt="">`:''}
+            <label class="review-photo-btn">
+              📷 ${sh.photoId?'差し替え':'写真を追加'}
+              <input type="file" accept="image/*" style="display:none" onchange="attachShotPhoto('${sp.id}','${sh.id}', this.files[0])">
+            </label>
+            ${sh.photoId?`<button class="review-photo-del" onclick="removeShotPhoto('${sp.id}','${sh.id}')">削除</button>`:''}
+          </div>
           `:''}
         </div>
       </div>`;
     rl.appendChild(card);
   });
   listEl.appendChild(rl);
+  rows.forEach(({sh})=>{ if(sh.photoId) loadShotPhotoInto(document.getElementById(`rvphoto-${sh.id}`), sh.photoId); });
 }
 
 function toggleReviewCard(spotId, shotId){
@@ -1828,8 +1972,46 @@ function saveCaptured(spotId, shotId){
   const btn = event?.target; if(btn){ btn.textContent='✓ 保存済み'; setTimeout(()=>btn.textContent='保存',1200); }
 }
 
+/* ---------- v10: アルバム(写真日記) ---------- */
+function renderAlbumList(listEl, trip){
+  listEl.innerHTML = "";
+  const allSpotIds = new Set();
+  trip.days.forEach(d=>d.entries.forEach(e=>{ if(e.type==='stay') allSpotIds.add(e.spotId); }));
+  const rows = [];
+  allSpotIds.forEach(sid=>{
+    const sp = spots.find(s=>s.id===sid); if(!sp) return;
+    (sp.shots||[]).forEach(sh=>{
+      if(sh.status==='shot' && sh.photoId && (!sh.tripId || sh.tripId===selTrip)) rows.push({sh, sp});
+    });
+  });
+  if(rows.length===0){
+    const empty = document.createElement("div"); empty.className="field-empty";
+    empty.innerHTML = "📔 まだ写真がありません<br><small>振り返りモードで撮ったショットに写真を追加できます</small>";
+    listEl.appendChild(empty); return;
+  }
+  rows.sort((a,b)=>{
+    const ta = (a.sh.date||'') + (a.sh.captured?.time||'');
+    const tb = (b.sh.date||'') + (b.sh.captured?.time||'');
+    return ta.localeCompare(tb);
+  });
+  const al = document.createElement("div"); al.className = "album-list";
+  rows.forEach(({sh, sp})=>{
+    const card = document.createElement("div"); card.className = "album-card";
+    card.innerHTML = `
+      <img class="album-photo" id="albumphoto-${sh.id}" alt="">
+      <div class="album-info">
+        <div class="album-title">${esc(sh.title||'(無題)')}</div>
+        <div class="album-meta">${esc(sp.name)}${sh.date?` ・ ${esc(sh.date)}`:''}${sh.captured?.time?` ${esc(sh.captured.time)}`:''}</div>
+      </div>`;
+    al.appendChild(card);
+  });
+  listEl.appendChild(al);
+  rows.forEach(({sh})=> loadShotPhotoInto(document.getElementById(`albumphoto-${sh.id}`), sh.photoId));
+}
+
 /* ---------- v8: 機材プランナー(UI) ---------- */
 function renderGearList(listEl, trip){
+  listEl.innerHTML = "";
   const wrap = document.createElement("div"); wrap.className="gear-wrap";
 
   const tagsHtml = GEAR_TAGS.map(tag => `
@@ -1897,6 +2079,8 @@ function renderTripView(){
   if(rvBtn) rvBtn.classList.toggle("on", reviewMode);
   const grBtn = document.getElementById("gearToggleBtn");
   if(grBtn) grBtn.classList.toggle("on", gearMode);
+  const alBtn = document.getElementById("albumToggleBtn");
+  if(alBtn) alBtn.classList.toggle("on", albumMode);
 
   // day tabs
   const tabsEl = document.getElementById("dayTabs"); tabsEl.innerHTML="";
@@ -1916,6 +2100,7 @@ function renderTripView(){
   if(fieldMode){ renderFieldList(listEl, trip, day); return; }
   if(reviewMode){ renderReviewList(listEl, trip); return; }
   if(gearMode){ renderGearList(listEl, trip); return; }
+  if(albumMode){ renderAlbumList(listEl, trip); return; }
 
   const n = day.entries.length;
 
@@ -2433,8 +2618,17 @@ function updateSpotPhotoUrl(spotId, value){
 }
 
 /* ---------- v5: backup ---------- */
-function exportJSON(){
-  const data = JSON.stringify({spots, trips}, null, 2);
+async function exportJSON(){
+  const photos = {};
+  const photoIds = new Set();
+  spots.forEach(sp=>(sp.shots||[]).forEach(sh=>{ if(sh.photoId) photoIds.add(sh.photoId); }));
+  for(const id of photoIds){
+    try{
+      const blob = await getPhoto(id);
+      if(blob) photos[id] = await blobToDataURL(blob);
+    }catch(e){}
+  }
+  const data = JSON.stringify({spots, trips, photos}, null, 2);
   const blob = new Blob([data], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -2461,6 +2655,12 @@ async function importJSON(event){
       data.spots.forEach(sp=>{ if(!sid.has(sp.id)) spots.push(sp); });
       const tid=new Set(trips.map(t=>t.id));
       data.trips.forEach(tr=>{ if(!tid.has(tr.id)) trips.push(tr); });
+    }
+    // v10: 写真日記のバックアップ(あれば)をIndexedDBへ復元
+    if(data.photos && typeof data.photos==='object'){
+      for(const [id, dataURL] of Object.entries(data.photos)){
+        try{ await putPhoto(id, dataURLToBlob(dataURL)); }catch(e){}
+      }
     }
     await saveSpots(); await saveTrips();
     event.target.value='';
