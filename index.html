@@ -916,13 +916,26 @@ async function loadSpots(){
     spots = JSON.parse(await store.get("spots-v1"));
     if(!Array.isArray(spots) || !spots.length) throw 0;
   }catch(e){ spots = DEFAULT_SPOTS.slice(); }
-  // migration: idのないスポットにsp_付与(v5)、shotsのないスポットに[](v6) — 冪等
+  // migration: idのないスポットにsp_付与(v5)、shotsのないスポットに[](v6)、
+  // visitedのないスポットに[](v10・訪問ログ=将来の地図ピン機能の下地) — 冪等
   let migrated = false;
   spots.forEach(sp => {
     if(!sp.id){ sp.id = idGen("sp_"); migrated = true; }
     if(!sp.shots){ sp.shots = []; migrated = true; }
+    if(!sp.visited){ sp.visited = []; migrated = true; }
   });
   if(migrated) await saveSpots();
+}
+
+/* ---------- v10: visited(訪問ログ)の下地 ---------- */
+function recordVisit(spotId, date, tripId, note){
+  const sp = spots.find(s=>s.id===spotId); if(!sp || !date) return;
+  if(!sp.visited) sp.visited = [];
+  const dup = sp.visited.some(v=>v.date===date && v.tripId===(tripId||null));
+  if(!dup){
+    sp.visited.push({date, tripId: tripId||null, note: note||""});
+    saveSpots();
+  }
 }
 async function saveSpots(){
   try{ await store.set("spots-v1", JSON.stringify(spots)); }catch(e){}
@@ -2176,6 +2189,7 @@ function saveEntry(){
   }
   if(entryFormState.mode==='edit') day.entries[entryFormState.ei]=entry;
   else day.entries.push(entry);
+  if(entry.type==="stay") recordVisit(entry.spotId, day.date, selTrip, entry.memo||"");
   saveTrips(); entryFormState=null; renderTripView();
 }
 
@@ -2460,7 +2474,8 @@ async function shareTrip(){
   const trip = trips.find(t=>t.id===selTrip); if(!trip) return;
   const refSpots = spots.filter(sp=>
     trip.days.some(d=>d.entries.some(e=>e.type==='stay'&&e.spotId===sp.id))
-  ).map(({shots, ...rest})=>rest);   // v6: ショットは共有しない(構図メモ・作例リンクを漏らさない)
+  ).map(({shots, visited, ...rest})=>rest);   // v6: ショットは共有しない(構図メモ・作例リンクを漏らさない)
+                                               // v10: 訪問ログも共有しない(全trip横断の個人の記録)
   const { tags, gearChecklist, ...tripRest } = trip;   // v8: 持ち物リストも共有しない(個人の機材準備層)
   const payload = JSON.stringify({trip: tripRest, spots:refSpots});
   let hash;
