@@ -456,6 +456,8 @@ else window.SunCalc = SunCalc;
   .trip-add-btn:hover{border-color:var(--amber)!important;color:var(--amber-deep)!important}
   .trip-share-btn{background:#EDF2FF!important;border-color:#BBC8E8!important;color:#2C4BAD!important}
   .trip-share-btn:hover{background:#D5E0FF!important}
+  .trip-del-btn{color:var(--bad)!important}
+  .trip-del-btn:hover{border-color:var(--bad)!important;background:#F5EBE7!important}
   .trip-form{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:10px 0 0}
   /* v5 ---- day tabs */
   .daytabs{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0 12px}
@@ -1405,6 +1407,7 @@ function renderTripSelector(){
   );
   if(selTrip){
     el.appendChild(mk("共有リンクをコピー", false, ()=>shareTrip(), "trip-share-btn"));
+    el.appendChild(mk("削除", false, ()=>delTrip(), "trip-del-btn"));
   }
   el.appendChild(mk("＋ 旅を追加", false, ()=>{
     const w=document.getElementById("tripAddFormWrap");
@@ -1432,6 +1435,14 @@ function addTrip(){
   ["tafName","tafStart"].forEach(id=>document.getElementById(id).value="");
   document.getElementById("tafDays").value = "3";
   render();
+}
+
+function delTrip(){
+  const trip = trips.find(t=>t.id===selTrip); if(!trip) return;
+  if(!confirm(`「${trip.name}」を削除しますか?(この操作は取り消せません。スポット自体や撮影履歴は残ります)`)) return;
+  trips = trips.filter(t=>t.id!==trip.id);
+  selTrip = null; selDay = 0; fieldMode=false; reviewMode=false; gearMode=false;
+  saveTrips(); render();
 }
 
 function updateTripSubtitle(value){
