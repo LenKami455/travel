@@ -357,7 +357,6 @@ else window.SunCalc = SunCalc;
   .bt-tab .bt-label{font-size:10px;letter-spacing:.04em}
   .bt-tab.active{color:var(--blue-deep)}
   .bt-tab:focus-visible{outline:2px solid var(--blue);outline-offset:-2px;border-radius:8px}
-  .trip-hint{color:var(--faint);font-size:13px;text-align:center;padding:30px 0}
   .trip-empty-inline{color:var(--faint);font-size:12.5px;padding:8px 2px;width:100%}
   .zukan-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
     background:var(--surface);border:1px solid var(--line);border-radius:10px;
@@ -465,20 +464,46 @@ else window.SunCalc = SunCalc;
   .banner{background:#EAF2FA;border:1px solid #BFDCF2;color:var(--blue-deep);
     padding:10px 14px;border-radius:10px;margin-bottom:16px;display:none;font-size:12px}
   .banner.info{background:#E4EEFB;border-color:#A9CBEA;color:var(--blue-deep)}
-  /* v5 ---- trip selector */
-  .trip-sel{display:flex;gap:8px;flex-wrap:wrap;align-items:center;
-    margin:16px 0 0;padding-bottom:14px;border-bottom:1px solid var(--line)}
+  /* v10 ---- 栞(旅の本棚) */
+  .trip-sel{margin:16px 0 0}
   .trip-sel button{background:var(--surface);border:1px solid var(--line2);color:var(--dim);
     font-family:var(--sans);font-size:12px;padding:5px 12px;border-radius:20px;cursor:pointer;
     transition:border-color .15s,background .15s,color .15s}
   .trip-sel button:hover{border-color:var(--blue);color:var(--blue-deep)}
-  .trip-sel button.active{background:var(--ink);color:#fff;border-color:var(--ink)}
-  .trip-add-btn{border-style:dashed!important;color:var(--faint)!important}
-  .trip-add-btn:hover{border-color:var(--blue)!important;color:var(--blue-deep)!important}
   .trip-share-btn{background:#E4EEFB!important;border-color:#A9CBEA!important;color:var(--blue-deep)!important}
   .trip-share-btn:hover{background:#D2E5F5!important}
   .trip-del-btn{color:var(--bad)!important}
   .trip-del-btn:hover{border-color:var(--bad)!important;background:#F5EBE7!important}
+  .trip-shelf{display:flex;flex-direction:column;gap:16px}
+  .trip-cover-card{border-radius:16px;overflow:hidden;cursor:pointer;background:var(--surface);
+    border:1px solid var(--line);transition:border-color .15s,box-shadow .15s}
+  .trip-cover-card:hover{border-color:var(--blue);box-shadow:0 4px 18px rgba(44,111,181,.12)}
+  .tcov-visual{position:relative;height:170px;overflow:hidden}
+  .tcov-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .tcov-generated{position:absolute;inset:0;
+    background:linear-gradient(180deg,#16324F 0%,#2C6FB5 60%,#EAF2FA 100%)}
+  .tcov-horizon{position:absolute;left:0;right:0;top:68%;height:1px;background:rgba(255,255,255,.55)}
+  .tcov-moon{position:absolute;right:22%;top:26%;width:22px;height:22px;border-radius:50%;
+    background:radial-gradient(circle at 35% 32%,#E8CE9F,#C9A063 70%);
+    box-shadow:0 0 14px rgba(201,160,99,.5)}
+  .tcov-scrim{position:absolute;left:0;right:0;bottom:0;height:56%;
+    background:linear-gradient(180deg,rgba(0,0,0,0),rgba(10,20,30,.55))}
+  .tcov-title{position:absolute;left:16px;right:16px;bottom:12px;color:#fff;
+    font-weight:500;font-size:19px;line-height:1.35;text-wrap:balance}
+  .tcov-stats{display:flex;align-items:center;gap:14px;padding:10px 16px;
+    font-size:12px;color:var(--dim);font-family:var(--mono)}
+  .tcov-open{margin-left:auto;color:var(--blue-deep);font-family:var(--sans)}
+  .trip-add-card{border:1px dashed var(--line2);border-radius:16px;padding:22px;
+    display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;
+    color:var(--faint);transition:border-color .15s,color .15s}
+  .trip-add-card:hover{border-color:var(--blue);color:var(--blue-deep)}
+  .tac-icon{font-size:18px}
+  .trip-detail-hd{display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px;
+    padding-bottom:14px;border-bottom:1px solid var(--line)}
+  .tdh-back{background:none!important;border:none!important;padding:4px 0!important;
+    color:var(--blue-deep)!important;font-size:13px}
+  .tdh-name{font-weight:500;font-size:16px;flex:1;min-width:0}
+  .tdh-actions{display:flex;gap:8px}
   .trip-form{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:10px 0 0}
   /* v5 ---- day tabs */
   .daytabs{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0 12px}
@@ -697,7 +722,6 @@ else window.SunCalc = SunCalc;
         <div class="formerr" id="tripFormErr"></div>
       </div>
     </div>
-    <div class="trip-hint" id="shioriHint" style="display:none">旅を選ぶとここに詳細が表示されます。</div>
   </div><!-- /shioriTab -->
 
   <div id="zukanView" style="display:none">
@@ -1329,7 +1353,6 @@ function render(){
 
   if(activeTab==='shiori'){
     renderTripSelector();
-    document.getElementById("shioriHint").style.display = (!selTrip && trips.length>0) ? "" : "none";
     if(selTrip) renderTripView();
   } else if(activeTab==='zukan'){
     renderZukanView();
@@ -1484,33 +1507,77 @@ function renderZukanView(){
   });
 }
 
-/* ---------- v5: trip selector ---------- */
+/* ---------- v10: 栞(旅の本棚) ---------- */
+function tripStats(tr){
+  const spotIds = new Set();
+  tr.days.forEach(day=>day.entries.forEach(e=>{
+    if(e.type==="stay") spotIds.add(e.spotId);
+  }));
+  let shotCount = 0;
+  spots.forEach(sp=>{ shotCount += (sp.shots||[]).filter(sh=>sh.tripId===tr.id).length; });
+  return { spotCount: spotIds.size, shotCount, dayCount: tr.days.length };
+}
+function tripCoverVisual(tr){
+  if(tr.coverPhotoUrl){
+    return `<img class="tcov-photo" src="${esc(tr.coverPhotoUrl)}" alt="" loading="lazy" onerror="this.remove()">`;
+  }
+  return `<div class="tcov-generated"></div><div class="tcov-horizon"></div><div class="tcov-moon"></div>`;
+}
+
 function renderTripSelector(){
   const el = document.getElementById("tripSel"); el.innerHTML = "";
-  const mk = (label, active, onclick, extra="") => {
-    const b = document.createElement("button");
-    b.textContent = label; if(active) b.classList.add("active");
-    if(extra) b.classList.add(extra); b.onclick = onclick; return b;
-  };
+
+  if(selTrip){
+    const trip = trips.find(t=>t.id===selTrip);
+    if(!trip){ selTrip = null; }
+    else{
+      const hd = document.createElement("div"); hd.className = "trip-detail-hd";
+      const backBtn = document.createElement("button");
+      backBtn.className = "tdh-back"; backBtn.textContent = "← 本棚に戻る";
+      backBtn.onclick = ()=>{ selTrip=null; selDay=0; render(); };
+      const nm = document.createElement("div"); nm.className = "tdh-name"; nm.textContent = trip.name;
+      const actions = document.createElement("div"); actions.className = "tdh-actions";
+      const shareBtn = document.createElement("button");
+      shareBtn.className = "trip-share-btn"; shareBtn.textContent = "共有リンクをコピー"; shareBtn.onclick = ()=>shareTrip();
+      const delBtn = document.createElement("button");
+      delBtn.className = "trip-del-btn"; delBtn.textContent = "削除"; delBtn.onclick = ()=>delTrip();
+      actions.appendChild(shareBtn); actions.appendChild(delBtn);
+      hd.appendChild(backBtn); hd.appendChild(nm); hd.appendChild(actions);
+      el.appendChild(hd);
+      return;
+    }
+  }
+
+  const shelf = document.createElement("div"); shelf.className = "trip-shelf";
   if(trips.length===0){
     const empty = document.createElement("div"); empty.className = "trip-empty-inline";
-    empty.textContent = "まだ旅程がありません。「＋ 旅を追加」から作成できます。";
-    el.appendChild(empty);
+    empty.textContent = "まだ旅程がありません。下の「＋ 旅を追加」から作成できます。";
+    shelf.appendChild(empty);
   }
-  trips.forEach(tr =>
-    el.appendChild(mk(tr.name, selTrip===tr.id, ()=>{
-      selTrip = (selTrip===tr.id) ? null : tr.id;
-      selDay=0; fieldMode=false; reviewMode=false; gearMode=false; render();
-    }))
-  );
-  if(selTrip){
-    el.appendChild(mk("共有リンクをコピー", false, ()=>shareTrip(), "trip-share-btn"));
-    el.appendChild(mk("削除", false, ()=>delTrip(), "trip-del-btn"));
-  }
-  el.appendChild(mk("＋ 旅を追加", false, ()=>{
+  trips.forEach(tr=>{
+    const stats = tripStats(tr);
+    const card = document.createElement("div"); card.className = "trip-cover-card";
+    card.innerHTML = `
+      <div class="tcov-visual">
+        ${tripCoverVisual(tr)}
+        <div class="tcov-scrim"></div>
+        <div class="tcov-title">${esc(tr.name)}</div>
+      </div>
+      <div class="tcov-stats">
+        <span>📍 ${stats.spotCount}</span><span>📷 ${stats.shotCount}</span><span>🗓 ${stats.dayCount}日</span>
+        <span class="tcov-open">開く →</span>
+      </div>`;
+    card.onclick = ()=>{ selTrip=tr.id; selDay=0; fieldMode=false; reviewMode=false; gearMode=false; render(); };
+    shelf.appendChild(card);
+  });
+  const addCard = document.createElement("div"); addCard.className = "trip-add-card";
+  addCard.innerHTML = `<span class="tac-icon">＋</span><span>旅を追加</span>`;
+  addCard.onclick = ()=>{
     const w=document.getElementById("tripAddFormWrap");
     w.style.display = w.style.display==="none" ? "" : "none";
-  }, "trip-add-btn"));
+  };
+  shelf.appendChild(addCard);
+  el.appendChild(shelf);
 }
 
 function addTrip(){
