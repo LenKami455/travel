@@ -608,20 +608,34 @@ else window.SunCalc = SunCalc;
   .route-conn{text-align:center;padding:6px 0;font-size:11px;color:var(--faint)}
   .route-conn a{color:var(--dusk);text-decoration:none}
   .route-conn a:hover{text-decoration:underline;color:var(--blue-deep)}
-  /* v6 -- shots */
-  .shots-section{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
-  .shots-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
-  .shots-hd span{font-size:11px;font-weight:600;color:var(--dim);letter-spacing:.04em;text-transform:uppercase}
-  .shot-add-btn{font-size:11px;padding:2px 10px;border:1px solid var(--line2);border-radius:12px;background:var(--surface);cursor:pointer;font-family:var(--sans);color:var(--dim)}
-  .shot-add-btn:hover{border-color:var(--blue);color:var(--blue-deep)}
-  .shot-row{display:flex;align-items:center;gap:6px;padding:5px 0;font-size:12px;border-bottom:1px solid var(--line)}
+  /* v10 -- スポット詳細: 要約タイル・光と潮の詳細 */
+  .summary-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+  .s-tile{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:12px 8px;text-align:center}
+  .s-tile-k{font-size:10px;letter-spacing:.06em;color:var(--faint)}
+  .s-tile-v{font-family:var(--mono);font-size:16px;font-weight:500;color:var(--ink);margin-top:3px}
+  .s-tile-score .s-tile-v{font-size:21px;font-weight:600}
+  .astro-details{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+  .astro-details summary{cursor:pointer;font-size:11px;font-weight:600;color:var(--dim);
+    letter-spacing:.04em;text-transform:uppercase}
+  .astro-details[open] summary{margin-bottom:10px}
+  /* v6/v10 -- shots(撮りたい一枚・発見性を高めた版) */
+  .shots-section{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+  .shots-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .shots-hd span{font-size:12px;font-weight:600;color:var(--dim);letter-spacing:.04em;text-transform:uppercase}
+  .shot-add-btn{font-size:13px;font-weight:500;padding:7px 16px;border:none;border-radius:20px;
+    background:var(--blue);color:#fff;cursor:pointer;font-family:var(--sans);
+    box-shadow:0 2px 8px rgba(44,111,181,.28)}
+  .shot-add-btn:hover{background:var(--blue-deep)}
+  .shot-row{display:flex;align-items:center;gap:8px;padding:9px 0;font-size:13.5px;border-bottom:1px solid var(--line)}
   .shot-row:last-of-type{border-bottom:none}
-  .shot-badge{font-size:13px;min-width:14px;text-align:center;flex-shrink:0}
+  .shot-badge{font-size:15px;min-width:16px;text-align:center;flex-shrink:0}
   .shot-badge.planned{color:var(--dim)}
   .shot-badge.shot{color:var(--blue-deep)}
   .shot-badge.skipped{color:var(--faint)}
-  .shot-title{flex:1;font-weight:500;color:var(--ink)}
-  .shot-note{color:var(--faint);font-size:11px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .shot-title{flex:1;font-weight:500;color:var(--ink);font-size:14.5px}
+  .shot-photo-icon{flex-shrink:0}
+  .shot-note{color:var(--faint);font-size:11.5px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .shot-acts{display:flex;gap:4px;flex-shrink:0}
   .shot-acts button{font-size:11px;padding:1px 7px;border:1px solid var(--line2);border-radius:4px;background:var(--surface);cursor:pointer;font-family:var(--sans);color:var(--dim)}
   .shot-acts button:hover{border-color:var(--blue);color:var(--blue-deep)}
@@ -958,6 +972,7 @@ function renderShotsSection(el, sp){
       h += `<div class="shot-row">
         <span class="shot-badge ${sh.status}">${BADGE[sh.status]||'◯'}</span>
         <span class="shot-title">${esc(sh.title||'(無題)')}</span>
+        ${sh.status==='shot'?'<span class="shot-photo-icon" title="撮影済み">📷</span>':''}
         ${sh.note?`<span class="shot-note">${esc(sh.note)}</span>`:''}
         <div class="shot-acts">
           <button onclick="openShotEditForm('${sp.id}','${sh.id}')">編集</button>
@@ -1437,46 +1452,56 @@ function renderCards(){
         ${sp.photoUrl?`<img class="spot-photo-thumb" src="${esc(sp.photoUrl)}" alt="" loading="lazy" onerror="this.remove()">`:""}
         <input class="spot-photo-input" placeholder="写真URL(任意・しおりに使用)" value="${esc(sp.photoUrl||"")}" onchange="updateSpotPhotoUrl('${sp.id}', this.value)">
       </div>
-      <canvas class="tl" width="720" height="56"></canvas>
-      <div class="ticks"><span>12</span><span>15</span><span>18</span><span>21</span><span>0</span><span>3</span><span>6</span><span>9</span><span>12</span></div>
-      <div class="legend">
-        <span><i style="background:rgba(176,126,62,.7)"></i>ゴールデン</span>
-        <span><i style="background:rgba(90,110,140,.7)"></i>ブルー</span>
-        <span><i style="background:#BFB9AE"></i>月が出ている</span>
-        <span><i style="background:#2C6FB5"></i>天の川(高度15°+)</span>
+      <div class="summary-tiles">
+        <div class="s-tile"><div class="s-tile-k">日の入り</div><div class="s-tile-v">${fmtI(s,sunset)}</div></div>
+        <div class="s-tile"><div class="s-tile-k">干潮</div><div class="s-tile-v">${coastal?(tp?(lows.map(e=>hm(new Date(e.t))).join("・")||"—"):"範囲外"):"—"}</div></div>
+        <div class="s-tile s-tile-score"><div class="s-tile-k">星空適性</div><div class="s-tile-v sc ${vCls}">${eff}</div></div>
       </div>
-      ${coastal?`<div class="tidecap">潮位カーブ(モデル予測・平均海面基準) ▼干潮 ▲満潮</div>
-      <canvas class="tide" width="720" height="46"></canvas>`:""}
-      <div class="body2">
-        <div class="grid">
-          <div class="cell"><div class="k">日の入 / 日の出</div><div class="v">${fmtI(s,sunset)} / ${fmtI(s,sunrise)}</div></div>
-          <div class="cell"><div class="k">夕GH / 夕BH</div><div class="v">${ghE?fmtI(s,ghE.a)+"–"+fmtI(s,ghE.b):"—"} <small>/ ${bhE?fmtI(s,bhE.a)+"–"+fmtI(s,bhE.b):"—"}</small></div></div>
-          <div class="cell"><div class="k">朝BH / 朝GH</div><div class="v">${bhM?fmtI(s,bhM.a)+"–"+fmtI(s,bhM.b):"—"} <small>/ ${ghM?fmtI(s,ghM.a)+"–"+fmtI(s,ghM.b):"—"}</small></div></div>
-          <div class="cell"><div class="k">月の出 / 月の入</div><div class="v">${fmtI(s,mrise)} / ${fmtI(s,mset)} <small>輝面 ${Math.round(s.frac*100)}%</small></div></div>
-          <div class="cell"><div class="k">天の川が狙える帯</div><div class="v">${gcTxt} <small>${gcSub}</small></div></div>
-          <div class="cell"><div class="k">ベスト帯(月・闇込み)</div><div class="v">${bw?fmtI(s,bw.a)+"–"+fmtI(s,bw.b):"—"}</div></div>
-          ${coastal?`<div class="cell"><div class="k">干潮 / 満潮</div><div class="v">${tp?(lows.map(e=>hm(new Date(e.t))).join("・")||"—"):"範囲外"} <small>/ ${tp?(highs.map(e=>hm(new Date(e.t))).join("・")||"—"):"7日先まで"}</small></div></div>`:""}
+      <div class="shots-section" data-spot-id="${sp.id}"></div>
+      <details class="astro-details">
+        <summary>光と潮の詳細</summary>
+        <canvas class="tl" width="720" height="56"></canvas>
+        <div class="ticks"><span>12</span><span>15</span><span>18</span><span>21</span><span>0</span><span>3</span><span>6</span><span>9</span><span>12</span></div>
+        <div class="legend">
+          <span><i style="background:rgba(176,126,62,.7)"></i>ゴールデン</span>
+          <span><i style="background:rgba(90,110,140,.7)"></i>ブルー</span>
+          <span><i style="background:#BFB9AE"></i>月が出ている</span>
+          <span><i style="background:#2C6FB5"></i>天の川(高度15°+)</span>
         </div>
-        <div class="compass">
-          ${compassSVG(mwAz, ssAz, srAz)}
-          <div class="cap">● 天の川 ・<span style="color:#B0653F">●</span> 日没 ・<span style="color:#5A6E8C">●</span> 日出</div>
+        ${coastal?`<div class="tidecap">潮位カーブ(モデル予測・平均海面基準) ▼干潮 ▲満潮</div>
+        <canvas class="tide" width="720" height="46"></canvas>`:""}
+        <div class="body2">
+          <div class="grid">
+            <div class="cell"><div class="k">日の入 / 日の出</div><div class="v">${fmtI(s,sunset)} / ${fmtI(s,sunrise)}</div></div>
+            <div class="cell"><div class="k">夕GH / 夕BH</div><div class="v">${ghE?fmtI(s,ghE.a)+"–"+fmtI(s,ghE.b):"—"} <small>/ ${bhE?fmtI(s,bhE.a)+"–"+fmtI(s,bhE.b):"—"}</small></div></div>
+            <div class="cell"><div class="k">朝BH / 朝GH</div><div class="v">${bhM?fmtI(s,bhM.a)+"–"+fmtI(s,bhM.b):"—"} <small>/ ${ghM?fmtI(s,ghM.a)+"–"+fmtI(s,ghM.b):"—"}</small></div></div>
+            <div class="cell"><div class="k">月の出 / 月の入</div><div class="v">${fmtI(s,mrise)} / ${fmtI(s,mset)} <small>輝面 ${Math.round(s.frac*100)}%</small></div></div>
+            <div class="cell"><div class="k">天の川が狙える帯</div><div class="v">${gcTxt} <small>${gcSub}</small></div></div>
+            <div class="cell"><div class="k">ベスト帯(月・闇込み)</div><div class="v">${bw?fmtI(s,bw.a)+"–"+fmtI(s,bw.b):"—"}</div></div>
+            ${coastal?`<div class="cell"><div class="k">干潮 / 満潮</div><div class="v">${tp?(lows.map(e=>hm(new Date(e.t))).join("・")||"—"):"範囲外"} <small>/ ${tp?(highs.map(e=>hm(new Date(e.t))).join("・")||"—"):"7日先まで"}</small></div></div>`:""}
+          </div>
+          <div class="compass">
+            ${compassSVG(mwAz, ssAz, srAz)}
+            <div class="cap">● 天の川 ・<span style="color:#B0653F">●</span> 日没 ・<span style="color:#5A6E8C">●</span> 日出</div>
+          </div>
         </div>
-      </div>
-      <div class="scorebox">
-        <div class="scoreN sc ${vCls}">${eff}</div>
-        <div>
-          <div class="verdict">${vTxt}</div>
-          <div class="scoreT">星空適性${wx?"(雲を加味)":""} / 100</div>
+        <div class="scorebox">
+          <div class="scoreN sc ${vCls}">${eff}</div>
+          <div>
+            <div class="verdict">${vTxt}</div>
+            <div class="scoreT">星空適性${wx?"(雲を加味)":""} / 100</div>
+          </div>
+          <div class="wx">
+            <div class="v">${wx? "☁"+wx.cloud+"% <small style='color:var(--dim)'>雨"+wx.precip+"%</small>" : "—"}</div>
+            <div class="k">${wx? "夜間平均の雲量 / 天文のみ "+sc : "雲量データなし"}</div>
+          </div>
         </div>
-        <div class="wx">
-          <div class="v">${wx? "☁"+wx.cloud+"% <small style='color:var(--dim)'>雨"+wx.precip+"%</small>" : "—"}</div>
-          <div class="k">${wx? "夜間平均の雲量 / 天文のみ "+sc : "雲量データなし"}</div>
-        </div>
-      </div>
+      </details>
       ${renderHistorySection(history)}`;
     el.appendChild(card);
     drawTimeline(card.querySelector("canvas.tl"), s);
     if(tp) drawTide(card.querySelector("canvas.tide"), tp, tex, selDate);
+    renderShotsSection(card.querySelector(".shots-section"), sp);
   });
 }
 
