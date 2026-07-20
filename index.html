@@ -3,7 +3,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nagi — 凪</title>
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#FBF8F2">
+<meta name="theme-color" content="#FFFFFF">
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
@@ -335,12 +335,12 @@ else window.SunCalc = SunCalc;
 </script>
 <style>
   :root{
-    --bg:#FBF8F2; --card:#F6F0E4; --surface:#FFFDF8; --line:#E6DECD; --line2:#D9CCB0;
-    --ink:#211C16; --dim:#77705F; --faint:#A79E89;
-    --amber:#B07E3E; --amber-deep:#8A5E28; --good:#4A7043; --bad:#B0653F; --dusk:#5A6E8C;
+    --bg:#FFFFFF; --card:#F5F8FC; --surface:#FFFFFF; --line:#E1E7F0; --line2:#C7D3E3;
+    --ink:#141B24; --dim:#59677A; --faint:#93A1B0;
+    --blue:#2C6FB5; --blue-deep:#1F5490;
+    --amber:#C9A063; --good:#4A7043; --bad:#B0653F; --dusk:#5A6E8C;
     --mono:"SF Mono","Menlo","Consolas",ui-monospace,monospace;
     --sans:"Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,-apple-system,sans-serif;
-    --serif:"Hiragino Mincho ProN","Yu Mincho","YuMincho",serif;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--ink);font-family:var(--sans);
@@ -357,11 +357,11 @@ else window.SunCalc = SunCalc;
   .datebar button,.datebar input[type=date]{
     background:var(--surface);border:1px solid var(--line2);color:var(--ink);
     font-family:var(--mono);font-size:13px;padding:7px 12px;border-radius:8px;cursor:pointer}
-  .datebar button:hover{border-color:var(--amber);color:var(--amber-deep)}
-  .datebar button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
-  .datelabel{font-family:var(--serif);font-size:17px;font-weight:600;margin-left:auto}
+  .datebar button:hover{border-color:var(--blue);color:var(--blue-deep)}
+  .datebar button:focus-visible,input:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+  .datelabel{font-weight:500;font-size:16px;margin-left:auto}
 
-  h2{font-size:12px;font-weight:600;letter-spacing:.18em;color:var(--dim);
+  h2{font-size:12px;font-weight:500;letter-spacing:.18em;color:var(--dim);
      margin:28px 0 10px;display:flex;align-items:center;gap:10px}
   h2::after{content:"";flex:1;height:1px;background:var(--line)}
 
@@ -369,16 +369,16 @@ else window.SunCalc = SunCalc;
   .weekrow{display:flex;align-items:baseline;gap:10px;background:var(--surface);
     border:1px solid var(--line);border-radius:10px;padding:10px 14px;cursor:pointer;
     transition:border-color .15s}
-  .weekrow:hover{border-color:var(--amber)}
+  .weekrow:hover{border-color:var(--blue)}
   .weekrow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
   .weekrow .dt,.weekrow .cl{font-family:var(--mono);font-size:12px;color:var(--dim)}
   .weekrow .sc{font-family:var(--mono);font-size:16px;width:2.4em;text-align:right;font-weight:600}
-  .sc.hi{color:var(--good)} .sc.mid{color:var(--amber-deep)} .sc.lo{color:var(--bad)}
+  .sc.hi{color:var(--good)} .sc.mid{color:var(--blue-deep)} .sc.lo{color:var(--bad)}
 
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
         padding:18px 18px 16px;margin-bottom:14px}
   .cardhead{display:flex;align-items:baseline;gap:10px}
-  .cardhead .nm{font-family:var(--serif);font-size:18px;font-weight:600}
+  .cardhead .nm{font-weight:500;font-size:17px}
   .cardhead .memo{color:var(--faint);font-size:11px;flex:1;min-width:0;
         overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .del{background:none;border:none;color:var(--faint);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:6px}
@@ -388,9 +388,9 @@ else window.SunCalc = SunCalc;
   .spot-photo-thumb{width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;border:1px solid var(--line)}
   .spot-photo-input{flex:1;min-width:0;border:none;border-bottom:1px dashed var(--line2);background:none;
     color:var(--dim);font-family:var(--sans);font-size:11.5px;padding:4px 2px}
-  .spot-photo-input:focus{outline:none;border-bottom-color:var(--amber);color:var(--ink)}
+  .spot-photo-input:focus{outline:none;border-bottom-color:var(--blue);color:var(--ink)}
   .spot-photo-input::placeholder{color:var(--faint)}
-  .history-badge{font-size:11px;color:var(--amber-deep);font-family:var(--mono);flex-shrink:0}
+  .history-badge{font-size:11px;color:var(--blue-deep);font-family:var(--mono);flex-shrink:0}
 
   canvas.tl{width:100%;height:56px;display:block;border-radius:8px;margin-top:14px}
   .ticks{display:flex;justify-content:space-between;font-family:var(--mono);
@@ -439,23 +439,23 @@ else window.SunCalc = SunCalc;
   .backup summary{cursor:pointer;user-select:none;color:var(--faint);font-size:11px}
   .backup summary:hover{color:var(--dim)}
   .backup button{font-size:12px;padding:5px 14px;border:1px solid var(--line2);border-radius:6px;background:var(--surface);cursor:pointer;font-family:var(--sans)}
-  .backup button:hover{border-color:var(--amber);color:var(--amber-deep)}
+  .backup button:hover{border-color:var(--blue);color:var(--blue-deep)}
   footer{margin-top:32px;color:var(--faint);font-size:11px;line-height:1.8}
-  .banner{background:#FBEFE6;border:1px solid #E8CDb0;color:var(--amber-deep);
+  .banner{background:#EAF2FA;border:1px solid #BFDCF2;color:var(--blue-deep);
     padding:10px 14px;border-radius:10px;margin-bottom:16px;display:none;font-size:12px}
-  .banner.info{background:#EDF2FF;border-color:#BBC8E8;color:#2C4BAD}
+  .banner.info{background:#E4EEFB;border-color:#A9CBEA;color:var(--blue-deep)}
   /* v5 ---- trip selector */
   .trip-sel{display:flex;gap:8px;flex-wrap:wrap;align-items:center;
     margin:16px 0 0;padding-bottom:14px;border-bottom:1px solid var(--line)}
   .trip-sel button{background:var(--surface);border:1px solid var(--line2);color:var(--dim);
     font-family:var(--sans);font-size:12px;padding:5px 12px;border-radius:20px;cursor:pointer;
     transition:border-color .15s,background .15s,color .15s}
-  .trip-sel button:hover{border-color:var(--amber);color:var(--amber-deep)}
+  .trip-sel button:hover{border-color:var(--blue);color:var(--blue-deep)}
   .trip-sel button.active{background:var(--ink);color:#fff;border-color:var(--ink)}
   .trip-add-btn{border-style:dashed!important;color:var(--faint)!important}
-  .trip-add-btn:hover{border-color:var(--amber)!important;color:var(--amber-deep)!important}
-  .trip-share-btn{background:#EDF2FF!important;border-color:#BBC8E8!important;color:#2C4BAD!important}
-  .trip-share-btn:hover{background:#D5E0FF!important}
+  .trip-add-btn:hover{border-color:var(--blue)!important;color:var(--blue-deep)!important}
+  .trip-share-btn{background:#E4EEFB!important;border-color:#A9CBEA!important;color:var(--blue-deep)!important}
+  .trip-share-btn:hover{background:#D2E5F5!important}
   .trip-del-btn{color:var(--bad)!important}
   .trip-del-btn:hover{border-color:var(--bad)!important;background:#F5EBE7!important}
   .trip-form{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:10px 0 0}
@@ -464,11 +464,11 @@ else window.SunCalc = SunCalc;
   .daytab{background:var(--surface);border:1px solid var(--line2);color:var(--dim);font-family:var(--mono);
     font-size:11px;padding:6px 14px;border-radius:8px;cursor:pointer;text-align:center;
     line-height:1.5;transition:border-color .15s,background .15s,color .15s}
-  .daytab:hover{border-color:var(--amber)}
+  .daytab:hover{border-color:var(--blue)}
   .daytab.active{background:var(--ink);color:#fff;border-color:var(--ink)}
   .trip-subtitle-input{width:100%;border:none;border-bottom:1px dashed var(--line2);background:none;
     color:var(--dim);font-family:var(--sans);font-size:13px;padding:8px 2px;margin-top:14px}
-  .trip-subtitle-input:focus{outline:none;border-bottom-color:var(--amber);color:var(--ink)}
+  .trip-subtitle-input:focus{outline:none;border-bottom-color:var(--blue);color:var(--ink)}
   .trip-subtitle-input::placeholder{color:var(--faint)}
   /* v6 ---- field mode */
   .tripview-hd{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:18px 0 0}
@@ -479,8 +479,8 @@ else window.SunCalc = SunCalc;
   .field-shot{display:flex;align-items:center;gap:12px;padding:14px 16px;
     border:1px solid var(--line);border-radius:12px;background:var(--surface);cursor:pointer;
     transition:border-color .15s,background .15s;user-select:none}
-  .field-shot:hover{border-color:var(--amber);background:#FDFAF5}
-  .field-shot.flagged{border-color:var(--amber);background:#FDF6E8}
+  .field-shot:hover{border-color:var(--blue);background:#F7FAFD}
+  .field-shot.flagged{border-color:var(--blue);background:#EAF2FA}
   .field-flag{font-size:22px;flex-shrink:0;width:28px;text-align:center}
   .field-info{flex:1;min-width:0}
   .field-title{font-size:15px;font-weight:500;line-height:1.3}
@@ -496,7 +496,7 @@ else window.SunCalc = SunCalc;
   .review-badge{font-size:13px;min-width:18px;text-align:center;flex-shrink:0}
   .review-title{flex:1;font-size:14px;font-weight:500}
   .review-spot{font-size:11px;color:var(--faint)}
-  .review-flag{font-size:12px;color:var(--amber-deep)}
+  .review-flag{font-size:12px;color:var(--blue-deep)}
   .review-form{margin-top:10px;border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:6px}
   .review-status-row{display:flex;gap:6px}
   .review-status-btn{flex:1;padding:7px;border:1px solid var(--line2);border-radius:8px;
@@ -525,7 +525,7 @@ else window.SunCalc = SunCalc;
   .entry-body{flex:1;min-width:0}
   .entry-stay{background:var(--card);border:1px solid var(--line);border-radius:12px;
     padding:10px 12px;cursor:pointer;transition:border-color .15s}
-  .entry-stay:hover{border-color:var(--amber)}
+  .entry-stay:hover{border-color:var(--blue)}
   .entry-stay .nm{font-weight:600;font-size:14px}
   .entry-stay .mo{color:var(--dim);font-size:12px;margin-top:2px}
   .astro-wrap{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
@@ -539,13 +539,13 @@ else window.SunCalc = SunCalc;
   .entry-place .nm{font-size:13px;font-weight:500}
   .entry-place .mo{color:var(--dim);font-size:12px;margin-top:2px}
   .entry-place a.pl-map{display:inline-block;font-size:11px;color:var(--dusk);text-decoration:none;margin-top:4px}
-  .entry-place a.pl-map:hover{text-decoration:underline;color:var(--amber-deep)}
+  .entry-place a.pl-map:hover{text-decoration:underline;color:var(--blue-deep)}
   .trip-empty{color:var(--faint);font-size:13px;text-align:center;padding:40px 0;line-height:2}
   /* v5 step3 ---- entry actions */
   .entry-actions{display:flex;gap:4px;margin-top:5px}
   .ea-btn{background:none;border:1px solid var(--line2);color:var(--dim);
     font-size:11px;padding:2px 8px;border-radius:6px;cursor:pointer;transition:border-color .15s,color .15s}
-  .ea-btn:hover:not([disabled]){border-color:var(--amber);color:var(--amber-deep)}
+  .ea-btn:hover:not([disabled]){border-color:var(--blue);color:var(--blue-deep)}
   .ea-btn[disabled]{opacity:.35;cursor:default;pointer-events:none}
   .ea-del:hover:not([disabled]){border-color:var(--bad)!important;color:var(--bad)!important}
   /* v5 step3 ---- entry form */
@@ -556,29 +556,29 @@ else window.SunCalc = SunCalc;
   .elist-add{margin-top:12px}
   .elist-add button{background:none;border:1px dashed var(--line2);color:var(--faint);
     font-size:13px;padding:10px;border-radius:10px;cursor:pointer;width:100%;transition:border-color .15s,color .15s}
-  .elist-add button:hover{border-color:var(--amber);color:var(--amber-deep)}
+  .elist-add button:hover{border-color:var(--blue);color:var(--blue-deep)}
   .maps-link{display:inline-block;font-size:11px;color:var(--dusk);text-decoration:none;margin-top:4px}
-  .maps-link:hover{text-decoration:underline;color:var(--amber-deep)}
+  .maps-link:hover{text-decoration:underline;color:var(--blue-deep)}
   .route-conn{text-align:center;padding:6px 0;font-size:11px;color:var(--faint)}
   .route-conn a{color:var(--dusk);text-decoration:none}
-  .route-conn a:hover{text-decoration:underline;color:var(--amber-deep)}
+  .route-conn a:hover{text-decoration:underline;color:var(--blue-deep)}
   /* v6 -- shots */
   .shots-section{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
   .shots-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
   .shots-hd span{font-size:11px;font-weight:600;color:var(--dim);letter-spacing:.04em;text-transform:uppercase}
   .shot-add-btn{font-size:11px;padding:2px 10px;border:1px solid var(--line2);border-radius:12px;background:var(--surface);cursor:pointer;font-family:var(--sans);color:var(--dim)}
-  .shot-add-btn:hover{border-color:var(--amber);color:var(--amber-deep)}
+  .shot-add-btn:hover{border-color:var(--blue);color:var(--blue-deep)}
   .shot-row{display:flex;align-items:center;gap:6px;padding:5px 0;font-size:12px;border-bottom:1px solid var(--line)}
   .shot-row:last-of-type{border-bottom:none}
   .shot-badge{font-size:13px;min-width:14px;text-align:center;flex-shrink:0}
   .shot-badge.planned{color:var(--dim)}
-  .shot-badge.shot{color:var(--amber-deep)}
+  .shot-badge.shot{color:var(--blue-deep)}
   .shot-badge.skipped{color:var(--faint)}
   .shot-title{flex:1;font-weight:500;color:var(--ink)}
   .shot-note{color:var(--faint);font-size:11px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .shot-acts{display:flex;gap:4px;flex-shrink:0}
   .shot-acts button{font-size:11px;padding:1px 7px;border:1px solid var(--line2);border-radius:4px;background:var(--surface);cursor:pointer;font-family:var(--sans);color:var(--dim)}
-  .shot-acts button:hover{border-color:var(--amber);color:var(--amber-deep)}
+  .shot-acts button:hover{border-color:var(--blue);color:var(--blue-deep)}
   .shot-form{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:8px}
   .history{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
   .history summary{cursor:pointer;font-size:11px;font-weight:600;color:var(--dim);letter-spacing:.04em;text-transform:uppercase}
@@ -590,18 +590,18 @@ else window.SunCalc = SunCalc;
   .history-title{font-weight:500;color:var(--ink)}
   .history-row-sub{color:var(--dim);font-size:11px;margin-top:2px}
   .history-files{font-family:var(--mono);color:var(--faint);font-size:11px;margin-top:1px}
-  .history-link{font-size:11px;color:var(--amber-deep);text-decoration:none}
+  .history-link{font-size:11px;color:var(--blue-deep);text-decoration:none}
   .history-link:hover{text-decoration:underline}
   @media (max-width:560px){ .body2{flex-direction:column} .compass{align-self:center} }
   /* v9 ---- しおりビュー(共有受信時のみ) */
   .shiori-cover{text-align:center;
-    background:linear-gradient(180deg,#FBF1DE,#FBF8F2);border-radius:16px;margin-bottom:20px;overflow:hidden}
+    background:linear-gradient(180deg,#EAF2FA,#FFFFFF);border-radius:16px;margin-bottom:20px;overflow:hidden}
   .shiori-cover-photo{width:100%;height:220px;object-fit:cover;display:block}
   .shiori-cover-body{padding:38px 14px 28px}
-  .shiori-eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.35em;color:var(--amber-deep)}
-  .shiori-title{font-family:var(--serif);font-size:27px;font-weight:600;margin:10px 0 6px;color:var(--ink);line-height:1.45}
+  .shiori-eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.35em;color:var(--blue-deep)}
+  .shiori-title{font-weight:500;font-size:27px;margin:10px 0 6px;color:var(--ink);line-height:1.4}
   .shiori-dates{font-family:var(--mono);font-size:12.5px;color:var(--dim)}
-  .shiori-route{margin-top:12px;font-size:13px;color:var(--amber-deep);letter-spacing:.02em}
+  .shiori-route{margin-top:12px;font-size:13px;color:var(--blue-deep);letter-spacing:.02em}
   .shiori-subtitle{margin-top:14px;font-size:14px;color:var(--dim);line-height:1.7}
   .shiori-stats{display:flex;justify-content:center;gap:30px;margin:0 0 26px;padding:16px 0;
     border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
@@ -613,7 +613,7 @@ else window.SunCalc = SunCalc;
   .shiori-daytabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;justify-content:center}
   .shiori-daytab{background:var(--surface);border:1px solid var(--line2);color:var(--dim);
     font-family:var(--mono);font-size:12px;padding:6px 14px;border-radius:20px;cursor:pointer}
-  .shiori-daytab.active{border-color:var(--amber);color:var(--amber-deep);background:#FBF3E7}
+  .shiori-daytab.active{border-color:var(--blue);color:var(--blue-deep);background:#EAF2FA}
   .shiori-chapter-hd{font-size:12.5px;font-weight:600;letter-spacing:.14em;color:var(--dim);
     margin-bottom:18px;text-align:center}
   .shiori-timeline{position:relative;padding-left:22px;max-width:560px;margin:0 auto}
@@ -621,7 +621,7 @@ else window.SunCalc = SunCalc;
     width:1px;background:var(--line2)}
   .shiori-item{position:relative;margin-bottom:24px}
   .shiori-item::before{content:"";position:absolute;left:-22px;top:5px;width:8px;height:8px;
-    border-radius:50%;background:var(--amber)}
+    border-radius:50%;background:var(--blue)}
   .shiori-item.transit::before{width:5px;height:5px;left:-20.5px;top:7px;background:var(--line2)}
   .shiori-item.note::before{background:var(--faint)}
   .shiori-time{font-family:var(--mono);font-size:11px;color:var(--faint);margin-bottom:4px}
@@ -631,9 +631,9 @@ else window.SunCalc = SunCalc;
     border:1px solid var(--line)}
   .shiori-stay-text{flex:1;min-width:0}
   .shiori-stay-name{font-size:12.5px;font-weight:600;color:var(--dim);letter-spacing:.04em}
-  .shiori-stay-name.solo{font-family:var(--serif);font-size:17px;color:var(--ink);letter-spacing:normal}
+  .shiori-stay-name.solo{font-weight:500;font-size:16px;color:var(--ink);letter-spacing:normal}
   .shiori-stay-memo{font-size:16px;color:var(--ink);line-height:1.85;margin-top:7px;
-    padding-left:12px;border-left:2px solid var(--amber)}
+    padding-left:12px;border-left:2px solid var(--blue)}
   .shiori-transit-line{font-size:12.5px;color:var(--dim);display:flex;align-items:center;gap:6px}
   .shiori-transit-leg{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:3px}
   .shiori-place-name{font-size:14px;font-weight:500;color:var(--ink)}
@@ -644,12 +644,12 @@ else window.SunCalc = SunCalc;
   .shiori-light-cell .v small{color:var(--dim);font-size:11px;font-family:var(--sans)}
   .shiori-light-cap{margin-top:10px;font-size:11px;color:var(--faint);letter-spacing:.04em}
   .shiori-footer{margin-top:36px;padding-top:22px;border-top:1px solid var(--line);text-align:center}
-  .shiori-import-btn{background:var(--surface);border:1px solid var(--amber);color:var(--amber-deep);
+  .shiori-import-btn{background:var(--surface);border:1px solid var(--blue);color:var(--blue-deep);
     font-size:13px;padding:9px 22px;border-radius:24px;cursor:pointer;font-family:var(--sans)}
-  .shiori-import-btn:hover{background:#FBF3E7}
+  .shiori-import-btn:hover{background:#EAF2FA}
   .shiori-about{margin:16px auto 0;max-width:480px;font-size:11.5px;color:var(--faint);line-height:1.8}
   .shiori-about a{color:var(--dusk);text-decoration:none;margin-left:4px}
-  .shiori-about a:hover{text-decoration:underline;color:var(--amber-deep)}
+  .shiori-about a:hover{text-decoration:underline;color:var(--blue-deep)}
 </style>
 
 <div class="wrap">
@@ -1236,23 +1236,23 @@ function compassSVG(mwAz, ssAz, srAz){
   let ticks="";
   for(let a=0;a<360;a+=45){
     const [x1,y1]=pt(a,R), [x2,y2]=pt(a,R-4);
-    ticks+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#D9CCB0" stroke-width="1.2"/>`;
+    ticks+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#C7D3E3" stroke-width="1.2"/>`;
   }
   let needle="";
   if(mwAz!=null){
     const [x,y]=pt(mwAz,R-9), [bx,by]=pt(mwAz+180,10);
-    needle=`<line x1="${bx}" y1="${by}" x2="${x}" y2="${y}" stroke="#B07E3E" stroke-width="2.5" stroke-linecap="round"/>
-            <circle cx="${x}" cy="${y}" r="3.2" fill="#B07E3E"/>`;
+    needle=`<line x1="${bx}" y1="${by}" x2="${x}" y2="${y}" stroke="#2C6FB5" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="${x}" cy="${y}" r="3.2" fill="#2C6FB5"/>`;
   }
   const dot=(az,color)=>{ if(az==null)return""; const [x,y]=pt(az,R); 
     return `<circle cx="${x}" cy="${y}" r="2.6" fill="${color}"/>`; };
   return `<svg width="84" height="84" viewBox="0 0 84 84" role="img" aria-label="方位コンパス">
-    <circle cx="${C}" cy="${C}" r="${R}" fill="#FFFDF8" stroke="#E6DECD" stroke-width="1.5"/>
+    <circle cx="${C}" cy="${C}" r="${R}" fill="#FFFFFF" stroke="#E1E7F0" stroke-width="1.5"/>
     ${ticks}
-    <text x="${C}" y="13" text-anchor="middle" font-size="9" fill="#77705F" font-family="sans-serif">N</text>
+    <text x="${C}" y="13" text-anchor="middle" font-size="9" fill="#59677A" font-family="sans-serif">N</text>
     ${dot(ssAz,"#B0653F")}${dot(srAz,"#5A6E8C")}
     ${needle}
-    <circle cx="${C}" cy="${C}" r="2" fill="#211C16"/>
+    <circle cx="${C}" cy="${C}" r="2" fill="#141B24"/>
   </svg>`;
 }
 
@@ -1356,7 +1356,7 @@ function renderCards(){
         <span><i style="background:rgba(176,126,62,.7)"></i>ゴールデン</span>
         <span><i style="background:rgba(90,110,140,.7)"></i>ブルー</span>
         <span><i style="background:#BFB9AE"></i>月が出ている</span>
-        <span><i style="background:#B07E3E"></i>天の川(高度15°+)</span>
+        <span><i style="background:#2C6FB5"></i>天の川(高度15°+)</span>
       </div>
       ${coastal?`<div class="tidecap">潮位カーブ(モデル予測・平均海面基準) ▼干潮 ▲満潮</div>
       <canvas class="tide" width="720" height="46"></canvas>`:""}
@@ -1828,7 +1828,7 @@ function appendEntryForm(container, day){
     <div id="efStay" style="${type!=='stay'?'display:none':''}">
       <div class="frow"><select id="efSpot" style="flex:1">${spotOpts}</select></div>
       <div id="efNewSpotToggle" style="margin-top:4px">
-        <button type="button" onclick="toggleNewSpotForm()" style="background:none;border:none;color:var(--amber-deep);font-size:12px;cursor:pointer;text-decoration:underline;text-underline-offset:2px">＋ 新しいスポットを追加</button>
+        <button type="button" onclick="toggleNewSpotForm()" style="background:none;border:none;color:var(--blue-deep);font-size:12px;cursor:pointer;text-decoration:underline;text-underline-offset:2px">＋ 新しいスポットを追加</button>
       </div>
       <div id="efNewSpot" style="display:none;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:4px">
         <div class="frow">
@@ -2099,7 +2099,7 @@ function drawTide(cv, pts, extremes, baseNoon){
       ctx.fillStyle="#B0653F";
       ctx.fillText("▼"+hm(new Date(e.t)), x, Math.min(H-2,y+13));
     }else{
-      ctx.fillStyle="#77705F";
+      ctx.fillStyle="#59677A";
       ctx.fillText("▲"+hm(new Date(e.t)), x, Math.max(9,y-5));
     }
   }
@@ -2115,8 +2115,8 @@ function drawTimeline(cv, s){
     ctx.fillStyle = base; ctx.fillRect(x,0,w,H);
     if(a>-4 && a<6){ ctx.fillStyle="rgba(176,126,62,.45)"; ctx.fillRect(x,0,w,H); }
     else if(a>-8 && a<=-4){ ctx.fillStyle="rgba(90,110,140,.40)"; ctx.fillRect(x,0,w,H); }
-    if(s.moon[i]>0){ ctx.fillStyle=`rgba(255,255,255,${0.3+0.5*s.frac})`; ctx.fillRect(x,3,w,4); }
-    if(s.sun[i]<-18 && s.gcA[i]>15){ ctx.fillStyle="#B07E3E"; ctx.fillRect(x,H-7,w,4); }
+    if(s.moon[i]>0){ ctx.fillStyle=`rgba(201,160,99,${0.3+0.5*s.frac})`; ctx.fillRect(x,3,w,4); }
+    if(s.sun[i]<-18 && s.gcA[i]>15){ ctx.fillStyle="#2C6FB5"; ctx.fillRect(x,H-7,w,4); }
   }
   ctx.strokeStyle="rgba(120,110,100,.35)";
   [6,12,18].forEach(h=>{ const x=Math.floor(h/24*W)+.5;
@@ -2300,7 +2300,7 @@ function shioriRouteSVG(routeSpots){
   if(routeSpots.length===0) return "";
   if(routeSpots.length===1){
     return `<svg class="shiori-routemap" viewBox="0 0 ${W} ${H}" role="img" aria-label="ルート図">
-      <circle cx="${W/2}" cy="${H/2}" r="4" fill="#B07E3E"/>
+      <circle cx="${W/2}" cy="${H/2}" r="4" fill="#2C6FB5"/>
     </svg>`;
   }
   const lats = routeSpots.map(s=>s.lat), lngs = routeSpots.map(s=>s.lng);
@@ -2313,12 +2313,12 @@ function shioriRouteSVG(routeSpots){
   }));
   const pathD = pts.map((p,i)=>(i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ');
   const dots = pts.map((p,i)=>{
-    const color = i===0 ? "#5A6E8C" : i===pts.length-1 ? "#B0653F" : "#B07E3E";
+    const color = i===0 ? "#5A6E8C" : i===pts.length-1 ? "#B0653F" : "#2C6FB5";
     const r = (i===0||i===pts.length-1) ? 3.6 : 2.4;
     return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r}" fill="${color}"/>`;
   }).join('');
   return `<svg class="shiori-routemap" viewBox="0 0 ${W} ${H}" role="img" aria-label="ルート図(簡易)">
-    <path d="${pathD}" fill="none" stroke="#D9CCB0" stroke-width="1.4" stroke-dasharray="3 3"/>
+    <path d="${pathD}" fill="none" stroke="#C7D3E3" stroke-width="1.4" stroke-dasharray="3 3"/>
     ${dots}
   </svg>`;
 }
@@ -2334,8 +2334,8 @@ function renderSharedView(){
   banner.className = "banner info";
   banner.style.display = "";
   banner.innerHTML = `📤 共有された旅程「${esc(trip.name)}」を表示中
-    <button onclick="importSharedTrip()" style="margin-left:12px;padding:4px 12px;font-size:12px;border:1px solid #2C4BAD;border-radius:6px;background:#fff;color:#2C4BAD;cursor:pointer">自分のアプリに取り込む</button>
-    <button onclick="exitSharedView()" style="margin-left:8px;padding:4px 12px;font-size:12px;border:1px solid #BBC8E8;border-radius:6px;background:#fff;color:#2C4BAD;cursor:pointer">閉じる</button>`;
+    <button onclick="importSharedTrip()" style="margin-left:12px;padding:4px 12px;font-size:12px;border:1px solid #1F5490;border-radius:6px;background:#fff;color:#1F5490;cursor:pointer">自分のアプリに取り込む</button>
+    <button onclick="exitSharedView()" style="margin-left:8px;padding:4px 12px;font-size:12px;border:1px solid #A9CBEA;border-radius:6px;background:#fff;color:#1F5490;cursor:pointer">閉じる</button>`;
 
   const shioriEl = document.getElementById("shioriView");
   shioriEl.style.display = "";
