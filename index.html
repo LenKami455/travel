@@ -1500,6 +1500,9 @@ function calcDur(dep, arr){
 function mapsUrl(origin, dest, travelmode='transit'){
   return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest)}&travelmode=${travelmode}`;
 }
+function spotMapsUrl(sp){
+  return `https://www.google.com/maps/search/?api=1&query=${sp.lat},${sp.lng}`;
+}
 
 /* ---------- compass svg ---------- */
 function compassSVG(mwAz, ssAz, srAz){
@@ -2194,6 +2197,7 @@ function renderTripView(){
             <div class="entry-stay">
               <div class="nm">${nm}</div>
               ${entry.memo?`<div class="mo">${esc(entry.memo)}</div>`:""}
+              ${sp?`<a href="${spotMapsUrl(sp)}" target="_blank" rel="noopener" class="maps-link" onclick="event.stopPropagation()">🗺 Google マップで開く</a>`:""}
               <div class="astro-wrap" id="astro-${ei}" style="display:none"></div>
             </div>
             ${mkActions(ei)}
@@ -3059,6 +3063,7 @@ function renderSharedView(){
             <div class="shiori-stay-text">
               <div class="shiori-stay-name${entry.memo?"":" solo"}">${nm}</div>
               ${entry.memo?`<div class="shiori-stay-memo">${esc(entry.memo)}</div>`:""}
+              ${sp?`<a href="${spotMapsUrl(sp)}" target="_blank" rel="noopener" class="maps-link" onclick="event.stopPropagation()">🗺 Google マップで開く</a>`:""}
             </div>
           </div>
           <div class="astro-wrap" id="sh-astro-${ei}" style="display:none"></div>
