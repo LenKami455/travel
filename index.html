@@ -2891,6 +2891,17 @@ function renderSharedView(){
       item.innerHTML = `<div class="shiori-note-txt">${esc(entry.text||"")}</div>`;
     }
     tl.appendChild(item);
+    // 次エントリも stay かつ両スポット座標あり → 経路コネクタを挿入(自分用ビューと同じディープリンク)
+    if(entry.type==="stay"){
+      const sp = shSpots.find(s=>s.id===entry.spotId);
+      const nextEntry = day.entries[ei+1];
+      const nextSp = nextEntry?.type==='stay' ? shSpots.find(s=>s.id===nextEntry.spotId) : null;
+      if(sp && nextSp){
+        const conn = document.createElement("div"); conn.className="route-conn";
+        conn.innerHTML=`<a href="${mapsUrl(`${sp.lat},${sp.lng}`,`${nextSp.lat},${nextSp.lng}`,'transit')}" target="_blank" rel="noopener">🗺 ${esc(sp.name)} → ${esc(nextSp.name)} の経路を調べる</a>`;
+        tl.appendChild(conn);
+      }
+    }
   });
 }
 
