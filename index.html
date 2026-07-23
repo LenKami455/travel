@@ -475,6 +475,32 @@ else window.SunCalc = SunCalc;
   .backup summary:hover{color:var(--dim)}
   .backup button{font-size:12px;padding:5px 14px;border:1px solid var(--line2);border-radius:6px;background:var(--surface);cursor:pointer;font-family:var(--sans)}
   .backup button:hover{border-color:var(--blue);color:var(--blue-deep)}
+
+  .import-preview{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:14px 16px;margin-top:10px}
+  .import-preview-hd{font-weight:500;font-size:14px;color:var(--ink)}
+  .import-preview-summary{color:var(--dim);font-size:12px;margin-top:2px}
+  .import-preview-days{margin-top:12px;display:flex;flex-direction:column;gap:10px}
+  .ip-day-hd{font-family:var(--mono);font-size:11px;color:var(--dusk);letter-spacing:.04em}
+  .ip-entries{list-style:none;margin:4px 0 0;padding:0;font-size:12.5px;color:var(--ink)}
+  .ip-entries li{padding:2px 0}
+  .import-preview-spots{margin-top:14px;border-top:1px solid var(--line2);padding-top:10px}
+  .ip-spots-hd{font-size:11px;color:var(--faint);letter-spacing:.06em;margin-bottom:6px}
+  .ip-spot{padding:6px 0;font-size:12.5px}
+  .ip-spot.ok{color:var(--good)}
+  .ip-spot-nm{color:var(--ink)}
+  .ip-spot-coords{display:flex;gap:8px;margin-top:4px}
+  .ip-spot-coords input{background:var(--surface);border:1px solid var(--line2);color:var(--ink);
+    border-radius:8px;padding:6px 10px;font-size:12.5px;font-family:var(--mono);flex:1;min-width:100px}
+  .import-preview-actions{margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .import-preview-actions button{font-size:12.5px;padding:7px 16px;border-radius:8px;cursor:pointer;
+    font-family:var(--sans)}
+  .ip-confirm{background:var(--ink);color:#fff;border:none}
+  .ip-confirm:hover{background:#000}
+  .ip-cancel{background:var(--surface);border:1px solid var(--line2);color:var(--dim)}
+  .ip-cancel:hover{border-color:var(--blue);color:var(--blue-deep)}
+  .ip-err{color:var(--bad);font-size:11.5px;flex-basis:100%}
+
   footer{margin-top:32px;color:var(--faint);font-size:11px;line-height:1.8}
   .banner{background:#EAF2FA;border:1px solid #BFDCF2;color:var(--blue-deep);
     padding:10px 14px;border-radius:10px;margin-bottom:16px;display:none;font-size:12px}
@@ -846,8 +872,13 @@ else window.SunCalc = SunCalc;
           <label style="cursor:pointer"><input type="radio" name="importMode" value="merge" checked> マージ(既存を残す)</label>
           <label style="margin-left:8px;cursor:pointer"><input type="radio" name="importMode" value="replace"> 置換(全データを上書き)</label>
         </div>
+        <div style="margin-top:6px;font-size:11px;color:var(--faint)">
+          テキストから旅程を作った場合は、<code>docs/add-trip-schema.md</code> のスキーマで
+          出力したJSONも同じボタンから読み込めます(取り込み前にプレビュー確認あり)。
+        </div>
       </div>
     </div>
+    <div id="importPreviewWrap" style="display:none"></div>
   </details>
 
   <footer>
@@ -1029,6 +1060,7 @@ let reviewMode = false;    // 振り返りモード(status確定・captured手�
 let gearMode = false;      // v8: 持ち物リストモード
 let albumMode = false;     // v10: 写真日記(アルバム)モード
 let zukanNoteOpenId = null; // v11: 図鑑で雰囲気メモ(shootingNote)を編集中のスポットid
+let importPreview = null;   // v11: 旅程下書き取り込み(A)のプレビュー中データ { trip, spotResolution }
 let sharedData = null;    // { trip, spots } when viewing a shared link
 let sharedSelDay = 0;
 let selDate = new Date(); selDate.setHours(12,0,0,0);
@@ -2671,6 +2703,13 @@ async function importJSON(event){
   try{
     const text = await file.text();
     const data = JSON.parse(text);
+    event.target.value='';
+    if(data.trip && Array.isArray(data.trip.days)){
+      // v11: 旅程下書き取り込み(A) — spotNameベースのスキーマはプレビュー確認を挟む
+      importPreview = buildImportPreview(data);
+      renderImportPreview();
+      return;
+    }
     if(!Array.isArray(data.spots)||!Array.isArray(data.trips)){
       alert('ファイルの形式が正しくありません(spots・trips が必要です)。'); return;
     }
@@ -2691,10 +2730,126 @@ async function importJSON(event){
       }
     }
     await saveSpots(); await saveTrips();
-    event.target.value='';
     render();
     alert(`インポート完了(${mode==='replace'?'置換':'マージ'})。`);
   } catch(e){ alert('JSONの読み込みに失敗しました: '+e.message); }
+}
+
+/* ---------- v11: 旅程下書き取り込み(A) ---------- */
+function buildImportPreview(data){
+  const trip = data.trip;
+  const newSpotDefs = new Map((data.newSpots||[]).map(s=>[String(s.name||"").trim(), s]));
+  const spotResolution = new Map(); // spotName(trim) -> {status:'existing',id} | {status:'new',lat,lng}
+  trip.days.forEach(day=>(day.entries||[]).forEach(e=>{
+    if(e.type!=="stay" || !e.spotName) return;
+    const nm = String(e.spotName).trim();
+    if(spotResolution.has(nm)) return;
+    const existing = spots.find(sp=>sp.name.trim()===nm);
+    if(existing){ spotResolution.set(nm, {status:'existing', id:existing.id}); return; }
+    const def = newSpotDefs.get(nm);
+    const lat = def && isFinite(def.lat) ? def.lat : null;
+    const lng = def && isFinite(def.lng) ? def.lng : null;
+    spotResolution.set(nm, {status:'new', lat, lng});
+  }));
+  return { trip, spotResolution };
+}
+function ipEntryLine(e){
+  if(e.type==="stay") return `<li>🏠 ${esc(e.spotName||"?")}${[e.arrive,e.depart].filter(Boolean).length?` ${[e.arrive,e.depart].filter(Boolean).join("–")}`:""}</li>`;
+  if(e.type==="transit") return `<li>${MODES[e.mode]||"→"} ${esc(e.from||"")} → ${esc(e.to||"")}</li>`;
+  if(e.type==="place") return `<li>📍 ${esc(e.name||"")}</li>`;
+  if(e.type==="note") return `<li>📝 ${esc(e.text||"")}</li>`;
+  return "";
+}
+function renderImportPreview(){
+  const wrap = document.getElementById("importPreviewWrap");
+  if(!importPreview){ wrap.style.display="none"; wrap.innerHTML=""; return; }
+  const { trip, spotResolution } = importPreview;
+  const dateRangeStr = trip.days.length
+    ? (trip.days.length>1 ? `${trip.days[0].date} 〜 ${trip.days[trip.days.length-1].date}` : trip.days[0].date)
+    : "";
+  wrap.style.display = "";
+  wrap.innerHTML = `
+    <div class="import-preview">
+      <div class="import-preview-hd">旅程「${esc(trip.name||"無題の旅")}」を取り込みますか?</div>
+      <div class="import-preview-summary">${esc(dateRangeStr)}・${trip.days.length}日${trip.subtitle?`・${esc(trip.subtitle)}`:""}</div>
+      <div class="import-preview-days">
+        ${trip.days.map((d,i)=>`<div class="ip-day">
+          <div class="ip-day-hd">Day${i+1} ${esc(d.date||"")}</div>
+          <ul class="ip-entries">${(d.entries||[]).map(ipEntryLine).join("")}</ul>
+        </div>`).join("")}
+      </div>
+      <div class="import-preview-spots">
+        <div class="ip-spots-hd">スポット</div>
+        ${[...spotResolution.entries()].map(([name,r])=> r.status==='existing'
+          ? `<div class="ip-spot ok">✓ ${esc(name)} — 既存スポットに一致</div>`
+          : `<div class="ip-spot new" data-name="${esc(name)}">
+               <div class="ip-spot-nm">${r.lat==null?"⚠️ 座標未設定":"🆕"} ${esc(name)}(新規スポット)</div>
+               <div class="ip-spot-coords">
+                 <input type="number" step="any" class="ip-lat" placeholder="緯度" value="${r.lat??""}">
+                 <input type="number" step="any" class="ip-lng" placeholder="経度" value="${r.lng??""}">
+               </div>
+             </div>`
+        ).join("")}
+      </div>
+      <div class="import-preview-actions">
+        <button class="ip-confirm" onclick="confirmImportPreview()">この内容で旅程を作成</button>
+        <button class="ip-cancel" onclick="cancelImportPreview()">キャンセル</button>
+        <div class="ip-err" id="ipErr"></div>
+      </div>
+    </div>`;
+}
+function confirmImportPreview(){
+  if(!importPreview) return;
+  const { trip, spotResolution } = importPreview;
+  const errEl = document.getElementById("ipErr");
+  const resolved = new Map(spotResolution);
+  for(const el of document.querySelectorAll(".ip-spot.new")){
+    const name = el.dataset.name;
+    const lat = parseFloat(el.querySelector(".ip-lat").value);
+    const lng = parseFloat(el.querySelector(".ip-lng").value);
+    if(!isFinite(lat) || !isFinite(lng) || Math.abs(lat)>90 || Math.abs(lng)>180){
+      errEl.textContent = `「${name}」の座標が未入力または不正です。緯度(±90)・経度(±180)を入力してください。`;
+      return;
+    }
+    resolved.set(name, {status:'new', lat, lng});
+  }
+  errEl.textContent = "";
+  const nameToId = {};
+  resolved.forEach((r, name)=>{
+    if(r.status==='existing'){ nameToId[name]=r.id; return; }
+    const sp = {id:idGen("sp_"), name, lat:r.lat, lng:r.lng, memo:""};
+    spots.push(sp); nameToId[name]=sp.id;
+  });
+  const newTrip = {
+    id: idGen("tr_"),
+    name: trip.name || "無題の旅",
+    subtitle: trip.subtitle || "",
+    tags: [], gearChecklist: [],
+    days: trip.days.map(d=>({
+      date: d.date,
+      entries: (d.entries||[]).map(e=>{
+        if(e.type==="stay"){
+          const { spotName, ...rest } = e;
+          return { ...rest, type:"stay", spotId: nameToId[String(spotName||"").trim()] };
+        }
+        return { ...e };
+      })
+    }))
+  };
+  trips.push(newTrip);
+  saveSpots(); saveTrips();
+  importPreview = null;
+  renderImportPreview();
+  selTrip = newTrip.id; activeTab = 'shiori';
+  render();
+  const banner = document.getElementById("banner");
+  banner.className = "banner"; banner.style.display = "";
+  banner.textContent = `「${newTrip.name}」を取り込みました。`;
+  setTimeout(()=>{ banner.style.display="none"; }, 3000);
+}
+function cancelImportPreview(){
+  importPreview = null;
+  renderImportPreview();
 }
 
 /* ---------- v5: share ---------- */
