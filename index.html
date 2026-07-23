@@ -489,9 +489,12 @@ else window.SunCalc = SunCalc;
   .ip-spot{padding:6px 0;font-size:12.5px}
   .ip-spot.ok{color:var(--good)}
   .ip-spot-nm{color:var(--ink)}
+  .ip-downgrade{display:block;margin-top:4px;font-size:11.5px;color:var(--dusk);cursor:pointer}
+  .ip-downgrade input{margin-right:5px;vertical-align:-1px}
   .ip-spot-coords{display:flex;gap:8px;margin-top:4px}
   .ip-spot-coords input{background:var(--surface);border:1px solid var(--line2);color:var(--ink);
     border-radius:8px;padding:6px 10px;font-size:12.5px;font-family:var(--mono);flex:1;min-width:100px}
+  .ip-spot-coords input:disabled{opacity:.4}
   .import-preview-actions{margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   .import-preview-actions button{font-size:12.5px;padding:7px 16px;border-radius:8px;cursor:pointer;
     font-family:var(--sans)}
@@ -2779,11 +2782,12 @@ function renderImportPreview(){
         </div>`).join("")}
       </div>
       <div class="import-preview-spots">
-        <div class="ip-spots-hd">スポット</div>
+        <div class="ip-spots-hd">スポット — 撮影スポットでない場所(ホテル・食事処等)が混ざっていたら「撮影スポットではない」にチェック</div>
         ${[...spotResolution.entries()].map(([name,r])=> r.status==='existing'
           ? `<div class="ip-spot ok">✓ ${esc(name)} — 既存スポットに一致</div>`
           : `<div class="ip-spot new" data-name="${esc(name)}">
                <div class="ip-spot-nm">${r.lat==null?"⚠️ 座標未設定":"🆕"} ${esc(name)}(新規スポット)</div>
+               <label class="ip-downgrade"><input type="checkbox" class="ip-downgrade-cb"> 撮影スポットではない(地図リンクのみのplaceとして取り込む)</label>
                <div class="ip-spot-coords">
                  <input type="number" step="any" class="ip-lat" placeholder="緯度" value="${r.lat??""}">
                  <input type="number" step="any" class="ip-lng" placeholder="経度" value="${r.lng??""}">
@@ -2797,18 +2801,26 @@ function renderImportPreview(){
         <div class="ip-err" id="ipErr"></div>
       </div>
     </div>`;
+  wrap.querySelectorAll(".ip-downgrade-cb").forEach(cb=>{
+    cb.onchange = ()=>{
+      const coordsInputs = cb.closest(".ip-spot").querySelectorAll(".ip-spot-coords input");
+      coordsInputs.forEach(inp=> inp.disabled = cb.checked);
+    };
+  });
 }
 function confirmImportPreview(){
   if(!importPreview) return;
   const { trip, spotResolution } = importPreview;
   const errEl = document.getElementById("ipErr");
   const resolved = new Map(spotResolution);
+  const downgraded = new Set(); // 撮影スポットではない→placeとして取り込む(スポットは作らない)
   for(const el of document.querySelectorAll(".ip-spot.new")){
     const name = el.dataset.name;
+    if(el.querySelector(".ip-downgrade-cb")?.checked){ downgraded.add(name); continue; }
     const lat = parseFloat(el.querySelector(".ip-lat").value);
     const lng = parseFloat(el.querySelector(".ip-lng").value);
     if(!isFinite(lat) || !isFinite(lng) || Math.abs(lat)>90 || Math.abs(lng)>180){
-      errEl.textContent = `「${name}」の座標が未入力または不正です。緯度(±90)・経度(±180)を入力してください。`;
+      errEl.textContent = `「${name}」の座標が未入力または不正です。緯度(±90)・経度(±180)を入力するか、「撮影スポットではない」にチェックしてください。`;
       return;
     }
     resolved.set(name, {status:'new', lat, lng});
@@ -2816,6 +2828,7 @@ function confirmImportPreview(){
   errEl.textContent = "";
   const nameToId = {};
   resolved.forEach((r, name)=>{
+    if(downgraded.has(name)) return;
     if(r.status==='existing'){ nameToId[name]=r.id; return; }
     const sp = {id:idGen("sp_"), name, lat:r.lat, lng:r.lng, memo:""};
     spots.push(sp); nameToId[name]=sp.id;
@@ -2829,8 +2842,13 @@ function confirmImportPreview(){
       date: d.date,
       entries: (d.entries||[]).map(e=>{
         if(e.type==="stay"){
+          const nm = String(e.spotName||"").trim();
+          if(downgraded.has(nm)){
+            const { spotName, ...rest } = e;
+            return { ...rest, type:"place", name: spotName };
+          }
           const { spotName, ...rest } = e;
-          return { ...rest, type:"stay", spotId: nameToId[String(spotName||"").trim()] };
+          return { ...rest, type:"stay", spotId: nameToId[nm] };
         }
         return { ...e };
       })
