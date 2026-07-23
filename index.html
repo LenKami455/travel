@@ -363,14 +363,24 @@ else window.SunCalc = SunCalc;
     color:var(--ink);margin:2px 0 14px}
   .zukan-search:focus{outline:none;border-color:var(--blue)}
   .zukan-search::placeholder{color:var(--faint)}
-  .zukan-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  .zukan-row{display:flex;flex-direction:column;
     background:var(--surface);border:1px solid var(--line);border-radius:10px;
-    padding:12px 14px;cursor:pointer;transition:border-color .15s;margin-bottom:8px}
+    padding:12px 14px;transition:border-color .15s;margin-bottom:8px}
   .zukan-row:hover{border-color:var(--blue)}
+  .zukan-row-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;cursor:pointer}
   .zukan-nm{font-weight:500;font-size:15px}
   .zukan-memo{color:var(--faint);font-size:11px;margin-top:2px;overflow:hidden;
     text-overflow:ellipsis;white-space:nowrap}
   .zukan-coords{font-family:var(--mono);font-size:10px;color:var(--faint);flex-shrink:0}
+  .zukan-note-toggle{align-self:flex-start;margin-top:8px;background:none;
+    border:1px dashed var(--line2);border-radius:8px;padding:4px 10px;font-size:11px;
+    color:var(--dusk);cursor:pointer;font-family:var(--sans)}
+  .zukan-note-toggle:hover{border-color:var(--blue);color:var(--blue-deep)}
+  .zukan-note-view{margin-top:6px;font-size:12.5px;color:var(--dim);white-space:pre-wrap}
+  .zukan-note-edit{width:100%;margin-top:6px;font-family:var(--sans);font-size:12.5px;
+    color:var(--ink);background:var(--surface);border:1px solid var(--line2);border-radius:8px;
+    padding:8px 10px;min-height:60px;resize:vertical;box-sizing:border-box}
+  .zukan-note-edit:focus{outline:none;border-color:var(--blue)}
 
   .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.35em;color:var(--faint)}
   h1{font-weight:700;font-size:22px;letter-spacing:.02em;margin:4px 0 0}
@@ -1018,6 +1028,7 @@ let fieldMode = false;     // 撮影チェックモード(fieldFlagのみ、stat
 let reviewMode = false;    // 振り返りモード(status確定・captured手入力)
 let gearMode = false;      // v8: 持ち物リストモード
 let albumMode = false;     // v10: 写真日記(アルバム)モード
+let zukanNoteOpenId = null; // v11: 図鑑で雰囲気メモ(shootingNote)を編集中のスポットid
 let sharedData = null;    // { trip, spots } when viewing a shared link
 let sharedSelDay = 0;
 let selDate = new Date(); selDate.setHours(12,0,0,0);
@@ -1668,17 +1679,34 @@ function renderZukanView(){
     if(q && !sp.name.toLowerCase().includes(q) && !(sp.memo||"").toLowerCase().includes(q)) return;
     shown++;
     const row = document.createElement("div"); row.className = "zukan-row";
+    const noteOpen = zukanNoteOpenId === sp.id;
     row.innerHTML = `
-      <div class="zukan-row-main">
-        <div class="zukan-nm">${esc(sp.name)}</div>
-        ${sp.memo?`<div class="zukan-memo">${esc(sp.memo)}</div>`:""}
+      <div class="zukan-row-top">
+        <div class="zukan-row-main">
+          <div class="zukan-nm">${esc(sp.name)}</div>
+          ${sp.memo?`<div class="zukan-memo">${esc(sp.memo)}</div>`:""}
+        </div>
+        <div class="zukan-coords">${sp.lat.toFixed(3)}, ${sp.lng.toFixed(3)}</div>
       </div>
-      <div class="zukan-coords">${sp.lat.toFixed(3)}, ${sp.lng.toFixed(3)}</div>`;
-    row.onclick = ()=>{
+      <button class="zukan-note-toggle" type="button">${sp.shootingNote?"🎞 雰囲気メモ":"🎞 雰囲気メモを書く"}</button>
+      ${noteOpen
+        ? `<textarea class="zukan-note-edit" placeholder="早朝の斜光がいい、霧が出ると化ける、等">${esc(sp.shootingNote||"")}</textarea>`
+        : (sp.shootingNote ? `<div class="zukan-note-view">${esc(sp.shootingNote)}</div>` : "")}`;
+    row.querySelector(".zukan-row-top").onclick = ()=>{
       switchTab('tonight');
       const cardEl = document.querySelectorAll('#cards .card')[si];
       if(cardEl) cardEl.scrollIntoView({behavior: reduceMotion?"auto":"smooth", block:"start"});
     };
+    row.querySelector(".zukan-note-toggle").onclick = (ev)=>{
+      ev.stopPropagation();
+      zukanNoteOpenId = noteOpen ? null : sp.id;
+      renderZukanView();
+    };
+    if(noteOpen){
+      const ta = row.querySelector(".zukan-note-edit");
+      ta.onclick = ev=>ev.stopPropagation();
+      ta.onchange = ()=>{ sp.shootingNote = ta.value.trim(); saveSpots(); };
+    }
     el.appendChild(row);
   });
   if(shown===0){
@@ -2674,8 +2702,9 @@ async function shareTrip(){
   const trip = trips.find(t=>t.id===selTrip); if(!trip) return;
   const refSpots = spots.filter(sp=>
     trip.days.some(d=>d.entries.some(e=>e.type==='stay'&&e.spotId===sp.id))
-  ).map(({shots, visited, ...rest})=>rest);   // v6: ショットは共有しない(構図メモ・作例リンクを漏らさない)
+  ).map(({shots, visited, shootingNote, ...rest})=>rest); // v6: ショットは共有しない(構図メモ・作例リンクを漏らさない)
                                                // v10: 訪問ログも共有しない(全trip横断の個人の記録)
+                                               // v11: 雰囲気メモも共有しない(自分用の撮影地印象)
   const { tags, gearChecklist, ...tripRest } = trip;   // v8: 持ち物リストも共有しない(個人の機材準備層)
   const payload = JSON.stringify({trip: tripRest, spots:refSpots});
   let hash;
